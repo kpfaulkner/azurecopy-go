@@ -21,3 +21,9 @@ type SimpleContainer struct {
 	// slice of all containers in this container
 	containerSlice []SimpleContainer
 }
+
+// GetContents retrieves contents of a container.
+// populates blobSlice and containerSlice
+func (c *SimpleContainer) GetContents(recursive bool) {
+
+}

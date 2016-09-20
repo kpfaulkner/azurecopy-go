@@ -7,9 +7,17 @@ package models
 // would also have a parent container "vdir1" etc.
 type SimpleBlob struct {
 
-	// data.
-	data   []byte
-	name   string
-	url    string
-	origin CloudOrigin
+	// data, if cached in memory
+	DataInMemory []byte
+
+	// path to cached version of blob on disk.
+	DataCachedAtPath string
+
+	// if true then DataInMemory contains blob data
+	// else DataCachedAtPath contains path to on disk cache of blob.
+	BlobInMemory bool
+
+	Name   string
+	URL    string
+	Origin CloudOrigin
 }

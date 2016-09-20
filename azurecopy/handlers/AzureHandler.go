@@ -10,12 +10,39 @@ type AzureHandler struct {
 	blobStorageClient storage.BlobStorageClient
 }
 
+// NewAzureHandler factory to create new one. Evil?
+func NewAzureHandler() *AzureHandler {
+	ah := new(AzureHandler)
+
+	client, err := storage.NewBasicClient("", "")
+	if err != nil {
+		// indicate error somehow..  still trying to figure that out with GO.
+	}
+
+	ah.blobStorageClient = client.GetBlobService()
+	return ah
+}
+
 // GetRootContainer gets root container of Azure. In reality there isn't a root container, but this would basically be a SimpleContainer
 // that has the containerSlice populated with the real Azure containers.
-func (ah *AzureHandler) GetRootContainer() models.SimpleContainer {
-	var container models.SimpleContainer
+func (ah *AzureHandler) GetRootContainer() *models.SimpleContainer {
 
-	return container
+	params := storage.ListContainersParameters{}
+	containerResponse, err := ah.blobStorageClient.ListContainers(params)
+
+	if err != nil {
+		// NFI.
+	}
+
+	rootContainer := models.NewSimpleContainer()
+
+	for _, c := range containerResponse.Containers {
+		sc := models.NewSimpleContainer()
+		sc.Name = c.Name
+		rootContainer.ContainerSlice = append(rootContainer.ContainerSlice, *sc)
+	}
+
+	return rootContainer
 }
 
 // ReadBlob reads a blob of a given name from a particular SimpleContainer and returns the SimpleBlob
@@ -36,4 +63,10 @@ func (ah *AzureHandler) ReadBlob(container models.SimpleContainer, blobName stri
 // and the blob name is vdir/vdir2/myblob
 func (ah *AzureHandler) WriteBlob(container models.SimpleContainer, blob models.SimpleBlob) {
 
+}
+
+func (ah *AzureHandler) CreateContainer(parentContainer models.SimpleContainer, containerName string) models.SimpleContainer {
+	var container models.SimpleContainer
+
+	return container
 }

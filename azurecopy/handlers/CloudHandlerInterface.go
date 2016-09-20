@@ -13,6 +13,9 @@ type CloudHandlerInterface interface {
 	// NOT recursive.
 	GetRootContainer() models.SimpleContainer
 
+	// create container.
+	CreateContainer(parentContainer models.SimpleContainer, containerName string) models.SimpleContainer
+
 	// given a container and a blob name, read the blob.
 	ReadBlob(container models.SimpleContainer, blobName string) models.SimpleBlob
 

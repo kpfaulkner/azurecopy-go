@@ -11,15 +11,24 @@ package models
 //
 // UNLESS I CHANGE MY MIND RANDOMLY, WHICH IS VERY POSSIBLE.
 type SimpleContainer struct {
-	name   string
-	url    string
-	origin CloudOrigin
+	Name   string
+	URL    string
+	Origin CloudOrigin
 
 	// slice of all blobs in this container
-	blobSlice []SimpleBlob
+	BlobSlice []SimpleBlob
 
 	// slice of all containers in this container
-	containerSlice []SimpleContainer
+	ContainerSlice []SimpleContainer
+}
+
+// NewSimpleContainer factory time!
+func NewSimpleContainer() *SimpleContainer {
+	c := SimpleContainer{}
+	c.BlobSlice = []SimpleBlob{}
+	c.ContainerSlice = []SimpleContainer{}
+
+	return &c
 }
 
 // GetContents retrieves contents of a container.

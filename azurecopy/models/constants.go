@@ -1,12 +1,12 @@
-package constants
+package models
 
 type CloudOrigin int
 
 // fugly.
 const (
-	Azure CloudOrigin = 1 + iota
-	S3
-	DropBox
-	OneDrive
-	Filesystem
+	OriginAzure CloudOrigin = 1 + iota
+	OriginS3
+	OriginDropBox
+	OriginOneDrive
+	OriginFilesystem
 )

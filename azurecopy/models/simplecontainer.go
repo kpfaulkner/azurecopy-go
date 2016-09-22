@@ -13,7 +13,7 @@ package models
 type SimpleContainer struct {
 	Name   string
 	URL    string
-	Origin CloudOrigin
+	Origin CloudType
 
 	// slice of all blobs in this container
 	BlobSlice []SimpleBlob

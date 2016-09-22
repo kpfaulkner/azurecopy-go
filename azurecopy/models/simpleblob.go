@@ -19,5 +19,5 @@ type SimpleBlob struct {
 
 	Name   string
 	URL    string
-	Origin CloudOrigin
+	Origin CloudType
 }

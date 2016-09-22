@@ -1,12 +1,12 @@
 package models
 
-type CloudOrigin int
+type CloudType int
 
 // fugly.
 const (
-	OriginAzure CloudOrigin = 1 + iota
-	OriginS3
-	OriginDropBox
-	OriginOneDrive
-	OriginFilesystem
+	Azure CloudType = 1 + iota
+	S3
+	DropBox
+	OneDrive
+	Filesystem
 )

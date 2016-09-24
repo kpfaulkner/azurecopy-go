@@ -15,11 +15,18 @@ type SimpleContainer struct {
 	URL    string
 	Origin CloudType
 
+	// parent.
+	// if nil parent then its the root.
+	ParentContainer *SimpleContainer
+
 	// slice of all blobs in this container
 	BlobSlice []SimpleBlob
 
 	// slice of all containers in this container
 	ContainerSlice []SimpleContainer
+
+	//Handler *CloudHandlerInterface
+
 }
 
 // NewSimpleContainer factory time!
@@ -27,12 +34,6 @@ func NewSimpleContainer() *SimpleContainer {
 	c := SimpleContainer{}
 	c.BlobSlice = []SimpleBlob{}
 	c.ContainerSlice = []SimpleContainer{}
-
+	c.ParentContainer = nil
 	return &c
-}
-
-// GetContents retrieves contents of a container.
-// populates blobSlice and containerSlice
-func (c *SimpleContainer) GetContents(recursive bool) {
-
 }

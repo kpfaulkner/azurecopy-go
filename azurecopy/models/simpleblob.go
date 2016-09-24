@@ -20,4 +20,7 @@ type SimpleBlob struct {
 	Name   string
 	URL    string
 	Origin CloudType
+
+	// parent.
+	ParentContainer *SimpleContainer
 }

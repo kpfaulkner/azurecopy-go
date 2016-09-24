@@ -9,7 +9,7 @@
             "remotePath": "",
             "port": 2345,
             "host": "127.0.0.1",
-            "program": "${workspaceRoot}",
+            "program": "${workspaceRoot}/azurecopycommand/",
             "env": {},
             "args": [],
             "showLog": true

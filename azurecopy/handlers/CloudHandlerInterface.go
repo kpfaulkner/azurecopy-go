@@ -21,4 +21,10 @@ type CloudHandlerInterface interface {
 
 	// given a container and blob, write blob.
 	WriteBlob(container models.SimpleContainer, blob models.SimpleBlob)
+
+	// Gets a container. Populating the subtree? OR NOT? hmmmm
+	GetContainer(containerName string) models.SimpleContainer
+
+	// populates container with data.
+	GetContainerContents(container *models.SimpleContainer, useEmulator bool)
 }

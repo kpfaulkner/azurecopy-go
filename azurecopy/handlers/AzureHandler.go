@@ -11,10 +11,18 @@ type AzureHandler struct {
 }
 
 // NewAzureHandler factory to create new one. Evil?
-func NewAzureHandler() *AzureHandler {
+func NewAzureHandler(useEmulator bool) *AzureHandler {
 	ah := new(AzureHandler)
 
-	client, err := storage.NewBasicClient("", "")
+	var err error
+	var client storage.Client
+
+	if useEmulator {
+		client, err = storage.NewEmulatorClient()
+	} else {
+		client, err = storage.NewBasicClient("", "")
+	}
+
 	if err != nil {
 		// indicate error somehow..  still trying to figure that out with GO.
 	}
@@ -39,6 +47,8 @@ func (ah *AzureHandler) GetRootContainer() models.SimpleContainer {
 	for _, c := range containerResponse.Containers {
 		sc := models.NewSimpleContainer()
 		sc.Name = c.Name
+		sc.Origin = models.Azure
+
 		rootContainer.ContainerSlice = append(rootContainer.ContainerSlice, *sc)
 	}
 
@@ -69,4 +79,16 @@ func (ah *AzureHandler) CreateContainer(parentContainer models.SimpleContainer, 
 	var container models.SimpleContainer
 
 	return container
+}
+
+// GetContainer gets a container. Populating the subtree? OR NOT? hmmmm
+func (ah *AzureHandler) GetContainer(containerName string) models.SimpleContainer {
+	var container models.SimpleContainer
+
+	return container
+}
+
+// GetContainerContents populates the passed container with the real contents.
+func (ah *AzureHandler) GetContainerContents(container *models.SimpleContainer, useEmulator bool) {
+
 }

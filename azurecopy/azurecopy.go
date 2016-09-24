@@ -1,8 +1,8 @@
 package azurecopy
 
 import (
-	"azurecopy/azurecopy/handlers"
 	"azurecopy/azurecopy/models"
+	"azurecopy/azurecopy/utils"
 )
 
 // AzureCopy main client class.
@@ -25,18 +25,18 @@ func NewAzureCopy() *AzureCopy {
 	return &ac
 }
 
-// GetHandler gets the appropriate handler for the cloudtype.
-// Should I be doing this another way?
-func (ac *AzureCopy) GetHandler(cloudType models.CloudType) handlers.CloudHandlerInterface {
-	switch cloudType {
-	case models.Azure:
-		ah := handlers.NewAzureHandler()
-		return ah
+// GetRootContainer get the root container (and immediate containers/blobs)
+func (ac *AzureCopy) GetRootContainer(cloudType models.CloudType, useEmulator bool) models.SimpleContainer {
 
-	case models.Filesystem:
-		fh := handlers.NewFilesystemHandler()
-		return fh
-	}
+	handler := utils.GetHandler(cloudType, useEmulator)
+	rootContainer := handler.GetRootContainer()
+	return rootContainer
+}
 
-	return nil
+// GetContainerContents populates the container with data.
+func (ac *AzureCopy) GetContainerContents(container *models.SimpleContainer, cloudType models.CloudType, useEmulator bool) {
+	handler := utils.GetHandler(cloudType, useEmulator)
+
+	handler.GetContainerContents(container, useEmulator)
+
 }

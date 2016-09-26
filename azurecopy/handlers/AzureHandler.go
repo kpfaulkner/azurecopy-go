@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"azurecopy/azurecopy/models"
+	"azurecopy/azurecopy/utils/azurehelper"
+	"log"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
 )
@@ -89,6 +91,24 @@ func (ah *AzureHandler) GetContainer(containerName string) models.SimpleContaine
 }
 
 // GetContainerContents populates the passed container with the real contents.
+// Can determine if the SimpleContainer is a real container or something virtual.
+// We need to trace back to the root node and determine what is really a container and
+// what is a blob.
+//
+// For Azure only the children of the root node can be a real azure container. Everything else
+// is a blob or a blob pretending to have vdirs.
 func (ah *AzureHandler) GetContainerContents(container *models.SimpleContainer, useEmulator bool) {
+
+	azureContainer, blobPrefix := azurehelper.GetContainerAndBlobPrefix(container)
+
+	// now we have the azure container and the prefix, we should be able to get a list of
+	// SimpleContainers and SimpleBlobs to add this to original container.
+	params := storage.ListBlobsParameters{}
+	params.Prefix = blobPrefix
+
+	blobList, err := ah.blobStorageClient.ListBlobs(azureContainer.Name, params)
+	if err != nil {
+		log.Fatal("Error")
+	}
 
 }

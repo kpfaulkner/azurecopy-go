@@ -9,14 +9,16 @@ import (
 // "so it begins"
 func main() {
 
-	ac := azurecopy.AzureCopy{}
+	ac := azurecopy.NewAzureCopy(true)
 
-	rootContainer = ac.GetRootContainer(models.Azure, true)
+	rootContainer := ac.GetRootContainer(models.Azure)
 
 	fmt.Println(rootContainer.ContainerSlice[0].Name)
 
-	// get a subcontainer.
-	//sc := ah.GetContainer(rootContainer.ContainerSlice[0].Name)
+	firstContainer := rootContainer.ContainerSlice[0]
 
-	fmt.Println(sc.BlobSlice[0].Name)
+	// populate subcontainer.
+	ac.GetContainerContents(&firstContainer)
+
+	//fmt.Println(firstContainer.BlobSlice[0].Name)
 }

@@ -117,8 +117,6 @@ func (ah *AzureHandler) GetContainerContents(container *models.SimpleContainer, 
 	}
 
 	ah.populateSimpleContainer(blobListResponse, container)
-
-	fmt.Println("blah blah")
 }
 
 // populateSimpleContainer takes a list of Azure blobs and breaks them into virtual directories (SimpleContainers) and

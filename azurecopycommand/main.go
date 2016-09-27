@@ -15,10 +15,12 @@ func main() {
 
 	fmt.Println(rootContainer.ContainerSlice[0].Name)
 
-	firstContainer := rootContainer.ContainerSlice[0]
+	for _, c := range rootContainer.ContainerSlice {
+		if c.Name == "temp" {
+			ac.GetContainerContents(&c)
 
-	// populate subcontainer.
-	ac.GetContainerContents(&firstContainer)
+			c.DisplayContainer("")
+		}
+	}
 
-	//fmt.Println(firstContainer.BlobSlice[0].Name)
 }

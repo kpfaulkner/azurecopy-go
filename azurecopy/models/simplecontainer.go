@@ -1,5 +1,7 @@
 package models
 
+import "fmt"
+
 // SimpleContainer is AzureCopy's cloud agnostic version of a container
 // SimpleContainers will NOT necessarily match real cloud provider definitions of
 // containers.
@@ -36,4 +38,19 @@ func NewSimpleContainer() *SimpleContainer {
 	c.ContainerSlice = []SimpleContainer{}
 	c.ParentContainer = nil
 	return &c
+}
+
+func (sc *SimpleContainer) DisplayContainer(padding string) {
+
+	fmt.Println(padding + sc.Name)
+
+	padding = padding + "  "
+
+	for _, b := range sc.BlobSlice {
+		fmt.Println(padding + b.Name)
+	}
+
+	for _, c := range sc.ContainerSlice {
+		c.DisplayContainer(padding)
+	}
 }

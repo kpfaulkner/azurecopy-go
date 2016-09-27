@@ -16,7 +16,7 @@ func GetContainerAndBlobPrefix(container *models.SimpleContainer) (*models.Simpl
 			blobPrefix = p.Name + "/" + blobPrefix
 		} else {
 			// parent IS nil, therefore we're in the real azure container.
-			azureContainer = p.ParentContainer
+			azureContainer = p
 		}
 
 		p = p.ParentContainer

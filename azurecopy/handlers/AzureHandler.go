@@ -3,7 +3,9 @@ package handlers
 import (
 	"azurecopy/azurecopy/models"
 	"azurecopy/azurecopy/utils/azurehelper"
+	"fmt"
 	"log"
+	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
 )
@@ -104,11 +106,82 @@ func (ah *AzureHandler) GetContainerContents(container *models.SimpleContainer, 
 	// now we have the azure container and the prefix, we should be able to get a list of
 	// SimpleContainers and SimpleBlobs to add this to original container.
 	params := storage.ListBlobsParameters{}
-	params.Prefix = blobPrefix
+	// params.Prefix = blobPrefix
 
-	blobList, err := ah.blobStorageClient.ListBlobs(azureContainer.Name, params)
+	fmt.Println(blobPrefix)
+
+	blobListResponse, err := ah.blobStorageClient.ListBlobs(azureContainer.Name, params)
 	if err != nil {
+		fmt.Println("oops")
 		log.Fatal("Error")
 	}
 
+	ah.populateSimpleContainer(blobListResponse, container)
+
+	fmt.Println("blah blah")
+}
+
+// populateSimpleContainer takes a list of Azure blobs and breaks them into virtual directories (SimpleContainers) and
+// SimpleBlob trees.
+//
+// vdir1/vdir2/blob1
+// vdir1/blob2
+// vdir1/vdir3/blob3
+// blob4
+func (ah *AzureHandler) populateSimpleContainer(blobListResponse storage.BlobListResponse, container *models.SimpleContainer) {
+
+	for _, blob := range blobListResponse.Blobs {
+
+		sp := strings.Split(blob.Name, "/")
+
+		// if no / then no subdirs etc. Just add as is.
+		if len(sp) == 1 {
+			b := models.SimpleBlob{}
+			b.Name = blob.Name
+			b.Origin = container.Origin
+			b.ParentContainer = container
+
+			// add to the blob slice within the container
+			container.BlobSlice = append(container.BlobSlice, b)
+		} else {
+
+			currentContainer := container
+			// if slashes, then split into chunks and create accordingly.
+			// skip last one since thats the blob name.
+			spShort := sp[0 : len(sp)-1]
+
+			for _, segment := range spShort {
+
+				// check if container already has a subcontainer with appropriate name
+				subContainer := ah.getSubContainer(currentContainer, segment)
+
+				if subContainer == nil {
+					// then we have a blob.
+				}
+				currentContainer = subContainer
+			}
+
+		}
+	}
+}
+
+// getSubContainer gets an existing subcontainer with parent of container and name of segment.
+// otherwise it creates it, adds it to the parent container and returns the new one.
+func (ah *AzureHandler) getSubContainer(container *models.SimpleContainer, segment string) *models.SimpleContainer {
+
+	// MUST be a shorthand way of doing this. But still crawling in GO.
+	for _, c := range container.ContainerSlice {
+		if c.Name == segment {
+			return &c
+		}
+	}
+
+	// create a new one.
+	newContainer := models.SimpleContainer{}
+	newContainer.Name = segment
+	newContainer.Origin = container.Origin
+	newContainer.ParentContainer = container
+	container.ContainerSlice = append(container.ContainerSlice, newContainer)
+
+	return &newContainer
 }

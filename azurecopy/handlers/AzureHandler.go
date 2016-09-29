@@ -53,7 +53,7 @@ func (ah *AzureHandler) GetRootContainer() models.SimpleContainer {
 		sc.Name = c.Name
 		sc.Origin = models.Azure
 
-		rootContainer.ContainerSlice = append(rootContainer.ContainerSlice, *sc)
+		rootContainer.ContainerSlice = append(rootContainer.ContainerSlice, sc)
 	}
 
 	return *rootContainer
@@ -132,6 +132,8 @@ func (ah *AzureHandler) populateSimpleContainer(blobListResponse storage.BlobLis
 
 		sp := strings.Split(blob.Name, "/")
 
+		fmt.Println("sp length is ", len(sp))
+
 		// if no / then no subdirs etc. Just add as is.
 		if len(sp) == 1 {
 			b := models.SimpleBlob{}
@@ -140,7 +142,7 @@ func (ah *AzureHandler) populateSimpleContainer(blobListResponse storage.BlobLis
 			b.ParentContainer = container
 
 			// add to the blob slice within the container
-			container.BlobSlice = append(container.BlobSlice, b)
+			container.BlobSlice = append(container.BlobSlice, &b)
 		} else {
 
 			currentContainer := container
@@ -148,16 +150,28 @@ func (ah *AzureHandler) populateSimpleContainer(blobListResponse storage.BlobLis
 			// skip last one since thats the blob name.
 			spShort := sp[0 : len(sp)-1]
 
+			fmt.Println("spshort len ", len(spShort))
+
 			for _, segment := range spShort {
 
 				// check if container already has a subcontainer with appropriate name
 				subContainer := ah.getSubContainer(currentContainer, segment)
 
-				if subContainer == nil {
-					// then we have a blob.
+				if subContainer != nil {
+					// then we have a blob so add it to currentContainer
+					currentContainer = subContainer
 				}
-				currentContainer = subContainer
+
 			}
+
+			b := models.SimpleBlob{}
+			b.Name = sp[len(sp)-1]
+			b.Origin = container.Origin
+			b.ParentContainer = container
+			currentContainer.BlobSlice = append(currentContainer.BlobSlice, &b)
+			fmt.Println("memory addr of current container", currentContainer)
+
+			fmt.Println("just added blob " + b.Name + " to container " + currentContainer.Name)
 
 		}
 	}
@@ -167,10 +181,13 @@ func (ah *AzureHandler) populateSimpleContainer(blobListResponse storage.BlobLis
 // otherwise it creates it, adds it to the parent container and returns the new one.
 func (ah *AzureHandler) getSubContainer(container *models.SimpleContainer, segment string) *models.SimpleContainer {
 
+	fmt.Println("AzureHandler::getSubContainer looking for ", segment)
+
 	// MUST be a shorthand way of doing this. But still crawling in GO.
 	for _, c := range container.ContainerSlice {
 		if c.Name == segment {
-			return &c
+			fmt.Println("found ", segment)
+			return c
 		}
 	}
 
@@ -179,7 +196,9 @@ func (ah *AzureHandler) getSubContainer(container *models.SimpleContainer, segme
 	newContainer.Name = segment
 	newContainer.Origin = container.Origin
 	newContainer.ParentContainer = container
-	container.ContainerSlice = append(container.ContainerSlice, newContainer)
+	container.ContainerSlice = append(container.ContainerSlice, &newContainer)
+
+	fmt.Println("made new ", segment)
 
 	return &newContainer
 }

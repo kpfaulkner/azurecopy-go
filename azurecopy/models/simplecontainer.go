@@ -22,10 +22,10 @@ type SimpleContainer struct {
 	ParentContainer *SimpleContainer
 
 	// slice of all blobs in this container
-	BlobSlice []SimpleBlob
+	BlobSlice []*SimpleBlob
 
 	// slice of all containers in this container
-	ContainerSlice []SimpleContainer
+	ContainerSlice []*SimpleContainer
 
 	//Handler *CloudHandlerInterface
 
@@ -34,20 +34,20 @@ type SimpleContainer struct {
 // NewSimpleContainer factory time!
 func NewSimpleContainer() *SimpleContainer {
 	c := SimpleContainer{}
-	c.BlobSlice = []SimpleBlob{}
-	c.ContainerSlice = []SimpleContainer{}
+	c.BlobSlice = []*SimpleBlob{}
+	c.ContainerSlice = []*SimpleContainer{}
 	c.ParentContainer = nil
 	return &c
 }
 
 func (sc *SimpleContainer) DisplayContainer(padding string) {
 
-	fmt.Println(padding + sc.Name)
+	fmt.Println("C " + padding + sc.Name)
 
 	padding = padding + "  "
 
 	for _, b := range sc.BlobSlice {
-		fmt.Println(padding + b.Name)
+		fmt.Println("B " + padding + b.Name)
 	}
 
 	for _, c := range sc.ContainerSlice {

@@ -42,12 +42,12 @@ func NewSimpleContainer() *SimpleContainer {
 
 func (sc *SimpleContainer) DisplayContainer(padding string) {
 
-	fmt.Println("C " + padding + sc.Name)
+	fmt.Println("+" + padding + sc.Name)
 
 	padding = padding + "  "
 
 	for _, b := range sc.BlobSlice {
-		fmt.Println("B " + padding + b.Name)
+		fmt.Println(padding + b.Name + "(" + b.URL + ")")
 	}
 
 	for _, c := range sc.ContainerSlice {

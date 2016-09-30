@@ -15,6 +15,7 @@ func main() {
 	for _, c := range rootContainer.ContainerSlice {
 		if c.Name == "temp" {
 			ac.GetContainerContents(c)
+			ac.ReadBlob(c.BlobSlice[0])
 			c.DisplayContainer("")
 		}
 	}

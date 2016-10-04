@@ -9,7 +9,7 @@ type FilesystemHandler struct {
 }
 
 // NewFilesystemHandler factory to create new one. Evil?
-func NewFilesystemHandler(useEmulator bool) *FilesystemHandler {
+func NewFilesystemHandler(useEmulator bool, cacheToDisk bool) *FilesystemHandler {
 	fh := new(FilesystemHandler)
 	return fh
 }
@@ -30,6 +30,12 @@ func (fh *FilesystemHandler) ReadBlob(container models.SimpleContainer, blobName
 	var blob models.SimpleBlob
 
 	return blob
+}
+
+// PopulateBlob. Used to read a blob IFF we already have a reference to it.
+func (fh *FilesystemHandler) PopulateBlob(blob *models.SimpleBlob) error {
+
+	return nil
 }
 
 // WriteBlob writes a blob to an Azure container.

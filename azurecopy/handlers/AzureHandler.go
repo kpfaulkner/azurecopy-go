@@ -4,6 +4,7 @@ import (
 	"azurecopy/azurecopy/models"
 	"azurecopy/azurecopy/utils/azurehelper"
 	"log"
+	"os"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
@@ -11,11 +12,23 @@ import (
 
 type AzureHandler struct {
 	blobStorageClient storage.BlobStorageClient
+
+	// determine if we're caching the blob to disk during copy operations.
+	// or if we're keeping it in memory
+	cacheToDisk   bool
+	cacheLocation string
+
+	// using the azure storage emulator
+	useEmulator bool
 }
 
 // NewAzureHandler factory to create new one. Evil?
-func NewAzureHandler(useEmulator bool) *AzureHandler {
+func NewAzureHandler(useEmulator bool, cacheToDisk bool) (*AzureHandler, error) {
 	ah := new(AzureHandler)
+
+	ah.useEmulator = useEmulator
+	ah.cacheToDisk = cacheToDisk
+	ah.cacheLocation = "c:/temp/cache/" // NFI... just making something up for now
 
 	var err error
 	var client storage.Client
@@ -27,11 +40,13 @@ func NewAzureHandler(useEmulator bool) *AzureHandler {
 	}
 
 	if err != nil {
+
 		// indicate error somehow..  still trying to figure that out with GO.
+		return nil, err
 	}
 
 	ah.blobStorageClient = client.GetBlobService()
-	return ah
+	return ah, nil
 }
 
 // GetRootContainer gets root container of Azure. In reality there isn't a root container, but this would basically be a SimpleContainer
@@ -67,6 +82,86 @@ func (ah *AzureHandler) ReadBlob(container models.SimpleContainer, blobName stri
 	var blob models.SimpleBlob
 
 	return blob
+}
+
+// PopulateBlob. Used to read a blob IFF we already have a reference to it.
+func (ah *AzureHandler) PopulateBlob(blob *models.SimpleBlob) error {
+	azureContainerName := ah.generateAzureContainerName(blob)
+	azureBlobName := blob.BlobCloudName
+
+	log.Println("AzureHandler::PopulateBlob blobname " + azureBlobName)
+
+	sr, err := ah.blobStorageClient.GetBlob(azureContainerName, azureBlobName)
+
+	if err != nil {
+		log.Fatal(err)
+		return err
+	}
+	defer sr.Close()
+
+	// file stream for cache.
+	var cacheFile *os.File
+
+	// populate this to disk.
+	if ah.cacheToDisk {
+		// need to get cache dir from somewhere!
+		cacheFile, err = os.OpenFile("c:/temp/cache/"+blob.Name, os.O_WRONLY|os.O_CREATE, 0)
+
+		if err != nil {
+			log.Fatal(err)
+			return err
+		}
+	} else {
+		blob.DataInMemory = []byte{}
+	}
+
+	// 10k buffer... way too small?
+	buffer := make([]byte, 1024*10)
+	numBytesRead := 0
+
+	finishedProcessing := false
+	for finishedProcessing == false {
+		numBytesRead, err = sr.Read(buffer)
+		if err != nil {
+			finishedProcessing = true
+			log.Println("READ ERROR ", err, numBytesRead)
+		}
+
+		if numBytesRead <= 0 {
+			finishedProcessing = true
+			continue
+		}
+
+		log.Println("read ", numBytesRead)
+
+		// if we're caching, write to a file.
+		if ah.cacheToDisk {
+			_, err = cacheFile.Write(buffer[:numBytesRead])
+			if err != nil {
+				log.Fatal(err)
+				return err
+			}
+		} else {
+
+			log.Println("adding to memory ", numBytesRead)
+			// needs to go into a byte array. How do we expand a slice again?
+			blob.DataInMemory = append(blob.DataInMemory, buffer[:numBytesRead]...)
+		}
+	}
+
+	log.Println("data in memory is ", len(blob.DataInMemory))
+
+	return nil
+}
+
+// generateAzureContainerName gets the REAL Azure container name for the simpleBlob
+func (ah *AzureHandler) generateAzureContainerName(blob *models.SimpleBlob) string {
+	currentContainer := blob.ParentContainer
+
+	for currentContainer.ParentContainer != nil {
+		currentContainer = currentContainer.ParentContainer
+	}
+	return currentContainer.Name
 }
 
 // WriteBlob writes a blob to an Azure container.
@@ -136,7 +231,7 @@ func (ah *AzureHandler) populateSimpleContainer(blobListResponse storage.BlobLis
 			b.Name = blob.Name
 			b.Origin = container.Origin
 			b.ParentContainer = container
-
+			b.BlobCloudName = blob.Name
 			// add to the blob slice within the container
 			container.BlobSlice = append(container.BlobSlice, &b)
 		} else {
@@ -161,6 +256,7 @@ func (ah *AzureHandler) populateSimpleContainer(blobListResponse storage.BlobLis
 			b.Name = sp[len(sp)-1]
 			b.Origin = container.Origin
 			b.ParentContainer = container
+			b.BlobCloudName = blob.Name // cloud specific name... ie the REAL name.
 			b.URL = ah.blobStorageClient.GetBlobURL(container.Name, blob.Name)
 			currentContainer.BlobSlice = append(currentContainer.BlobSlice, &b)
 

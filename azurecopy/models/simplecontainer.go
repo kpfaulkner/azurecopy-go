@@ -26,9 +26,6 @@ type SimpleContainer struct {
 
 	// slice of all containers in this container
 	ContainerSlice []*SimpleContainer
-
-	//Handler *CloudHandlerInterface
-
 }
 
 // NewSimpleContainer factory time!

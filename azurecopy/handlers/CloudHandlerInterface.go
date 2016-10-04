@@ -19,6 +19,9 @@ type CloudHandlerInterface interface {
 	// given a container and a blob name, read the blob.
 	ReadBlob(container models.SimpleContainer, blobName string) models.SimpleBlob
 
+	// if we already have a reference to a SimpleBlob, then read it and populate it.
+	PopulateBlob(blob *models.SimpleBlob) error
+
 	// given a container and blob, write blob.
 	WriteBlob(container models.SimpleContainer, blob models.SimpleBlob)
 

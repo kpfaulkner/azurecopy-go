@@ -17,8 +17,14 @@ type SimpleBlob struct {
 	// else DataCachedAtPath contains path to on disk cache of blob.
 	BlobInMemory bool
 
-	Name   string
-	URL    string
+	// name of blob. Generic nice stuff. (ie no fake vdirs)
+	Name string
+	URL  string
+
+	// REAL platform (Azure, S3 etc) name of blob.
+	// ie including the nasty vdirs etc.
+	BlobCloudName string
+
 	Origin CloudType
 
 	// parent.

@@ -26,6 +26,9 @@ type SimpleContainer struct {
 
 	// slice of all containers in this container
 	ContainerSlice []*SimpleContainer
+
+	// have we attempted to populate this container?
+	Populated bool
 }
 
 // NewSimpleContainer factory time!
@@ -34,6 +37,7 @@ func NewSimpleContainer() *SimpleContainer {
 	c.BlobSlice = []*SimpleBlob{}
 	c.ContainerSlice = []*SimpleContainer{}
 	c.ParentContainer = nil
+	c.Populated = false
 	return &c
 }
 

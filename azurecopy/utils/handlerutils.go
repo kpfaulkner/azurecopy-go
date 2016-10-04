@@ -14,7 +14,7 @@ func GetHandler(cloudType models.CloudType, useEmulator bool, cacheToDisk bool) 
 		return ah
 
 	case models.Filesystem:
-		fh := handlers.NewFilesystemHandler(useEmulator, cacheToDisk)
+		fh, _ := handlers.NewFilesystemHandler("C:/temp/")
 		return fh
 	}
 

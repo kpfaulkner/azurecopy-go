@@ -105,7 +105,7 @@ func (ah *AzureHandler) PopulateBlob(blob *models.SimpleBlob) error {
 	// populate this to disk.
 	if ah.cacheToDisk {
 		// need to get cache dir from somewhere!
-		cacheFile, err = os.OpenFile("c:/temp/cache/"+blob.Name, os.O_WRONLY|os.O_CREATE, 0)
+		cacheFile, err = os.OpenFile(ah.cacheLocation+blob.Name, os.O_WRONLY|os.O_CREATE, 0)
 
 		if err != nil {
 			log.Fatal(err)
@@ -249,7 +249,6 @@ func (ah *AzureHandler) populateSimpleContainer(blobListResponse storage.BlobLis
 					// then we have a blob so add it to currentContainer
 					currentContainer = subContainer
 				}
-
 			}
 
 			b := models.SimpleBlob{}
@@ -259,11 +258,12 @@ func (ah *AzureHandler) populateSimpleContainer(blobListResponse storage.BlobLis
 			b.BlobCloudName = blob.Name // cloud specific name... ie the REAL name.
 			b.URL = ah.blobStorageClient.GetBlobURL(container.Name, blob.Name)
 			currentContainer.BlobSlice = append(currentContainer.BlobSlice, &b)
-
+			currentContainer.Populated = true
 			log.Println("just added blob " + b.Name + " to container " + currentContainer.Name)
 
 		}
 	}
+	container.Populated = true
 }
 
 // getSubContainer gets an existing subcontainer with parent of container and name of segment.
@@ -285,6 +285,5 @@ func (ah *AzureHandler) getSubContainer(container *models.SimpleContainer, segme
 	newContainer.Origin = container.Origin
 	newContainer.ParentContainer = container
 	container.ContainerSlice = append(container.ContainerSlice, &newContainer)
-
 	return &newContainer
 }

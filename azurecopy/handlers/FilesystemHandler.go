@@ -27,14 +27,14 @@ func NewFilesystemHandler(rootContainerPath string) (*FilesystemHandler, error) 
 // that has the containerSlice populated with the real Azure containers.
 func (fh *FilesystemHandler) GetRootContainer() models.SimpleContainer {
 
-	dir, err := os.OpenFile(fh.rootContainerPath, os.O_WRONLY, 0)
+	dir, err := os.OpenFile(fh.rootContainerPath, os.O_RDONLY, 0)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("ERR OpenFile ", err)
 	}
 
 	fileInfos, err := dir.Readdir(0)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("ERR ReadDir", err)
 	}
 
 	rootContainer := models.NewSimpleContainer()
@@ -47,6 +47,7 @@ func (fh *FilesystemHandler) GetRootContainer() models.SimpleContainer {
 			sc.Name = f.Name()
 			sc.Origin = models.Filesystem
 			sc.ParentContainer = rootContainer
+			sc.Populated = false
 			rootContainer.ContainerSlice = append(rootContainer.ContainerSlice, sc)
 
 		} else {
@@ -57,8 +58,8 @@ func (fh *FilesystemHandler) GetRootContainer() models.SimpleContainer {
 			rootContainer.BlobSlice = append(rootContainer.BlobSlice, &b)
 
 		}
-
 	}
+	rootContainer.Populated = true
 
 	return *rootContainer
 }
@@ -107,14 +108,56 @@ func (fh *FilesystemHandler) GetContainer(containerName string) models.SimpleCon
 	return container
 }
 
-// GetContainerContents populates the passed container with the real contents.
-// Can determine if the SimpleContainer is a real container or something virtual.
-// We need to trace back to the root node and determine what is really a container and
-// what is a blob.
-//
-// For Azure only the children of the root node can be a real azure container. Everything else
-// is a blob or a blob pretending to have vdirs.
+func (fh *FilesystemHandler) GenerateFullPath(container *models.SimpleContainer) string {
+
+	path := container.Name
+	currentContainer := container.ParentContainer
+	for currentContainer != nil {
+		path = currentContainer.Name + "/" + path
+		currentContainer = currentContainer.ParentContainer
+	}
+
+	return fh.rootContainerPath + path
+}
+
+// GetContainerContents populates the container (directory) with the next level contents
+// currently wont do recursive.
 func (fh *FilesystemHandler) GetContainerContents(container *models.SimpleContainer, useEmulator bool) {
+
+	fullPath := fh.GenerateFullPath(container)
+	dir, err := os.OpenFile(fullPath, os.O_RDONLY, 0)
+	if err != nil {
+		log.Fatal("ERR OpenFile ", err)
+	}
+
+	fileInfos, err := dir.Readdir(0)
+	if err != nil {
+		log.Fatal("ERR ReadDir", err)
+	}
+
+	for _, f := range fileInfos {
+
+		// determine if file or directory.
+		// do we go recursive?
+		if f.IsDir() {
+			sc := models.NewSimpleContainer()
+			sc.Name = f.Name()
+			sc.Origin = models.Filesystem
+			sc.ParentContainer = container
+			sc.Populated = false
+			container.ContainerSlice = append(container.ContainerSlice, sc)
+
+		} else {
+			b := models.SimpleBlob{}
+			b.Name = f.Name()
+			b.ParentContainer = container
+			b.Origin = models.Filesystem
+			b.URL = fh.rootContainerPath + container.Name + "/" + b.Name
+			container.BlobSlice = append(container.BlobSlice, &b)
+
+		}
+	}
+	container.Populated = true
 
 }
 

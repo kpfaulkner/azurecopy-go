@@ -15,7 +15,11 @@ func main() {
 	for _, c := range rootContainer.ContainerSlice {
 		if c.Name == "autorest" {
 			ac.GetContainerContents(c)
-			ac.ReadBlob(c.BlobSlice[0])
+
+			// now get subdir.
+			subDir := c.ContainerSlice[0]
+			ac.GetContainerContents(subDir)
+
 			c.DisplayContainer("")
 		}
 	}

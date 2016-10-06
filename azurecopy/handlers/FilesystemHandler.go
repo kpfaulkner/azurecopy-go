@@ -91,8 +91,12 @@ func (fh *FilesystemHandler) generateAzureContainerName(blob *models.SimpleBlob)
 // ie we might have RootSimpleContainer -> SimpleContainer(myrealcontainer) -> SimpleContainer(vdir1) -> SimpleContainer(vdir2)
 // and if the blobName is "myblob" then the REAL underlying Azure structure would be container == "myrealcontainer"
 // and the blob name is vdir/vdir2/myblob
-func (fh *FilesystemHandler) WriteBlob(container models.SimpleContainer, blob models.SimpleBlob) {
+func (fh *FilesystemHandler) WriteBlob(container models.SimpleContainer, blob *models.SimpleBlob) error {
+	return nil
+}
 
+func (fh *FilesystemHandler) WriteContainer(sourceContainer models.SimpleContainer, destContainer models.SimpleContainer) error {
+	return nil
 }
 
 func (fh *FilesystemHandler) CreateContainer(parentContainer models.SimpleContainer, containerName string) models.SimpleContainer {
@@ -108,7 +112,7 @@ func (fh *FilesystemHandler) GetContainer(containerName string) models.SimpleCon
 	return container
 }
 
-func (fh *FilesystemHandler) GenerateFullPath(container *models.SimpleContainer) string {
+func (fh *FilesystemHandler) generateFullPath(container *models.SimpleContainer) string {
 
 	path := container.Name
 	currentContainer := container.ParentContainer
@@ -124,7 +128,7 @@ func (fh *FilesystemHandler) GenerateFullPath(container *models.SimpleContainer)
 // currently wont do recursive.
 func (fh *FilesystemHandler) GetContainerContents(container *models.SimpleContainer, useEmulator bool) {
 
-	fullPath := fh.GenerateFullPath(container)
+	fullPath := fh.generateFullPath(container)
 	dir, err := os.OpenFile(fullPath, os.O_RDONLY, 0)
 	if err != nil {
 		log.Fatal("ERR OpenFile ", err)
@@ -152,7 +156,7 @@ func (fh *FilesystemHandler) GetContainerContents(container *models.SimpleContai
 			b.Name = f.Name()
 			b.ParentContainer = container
 			b.Origin = models.Filesystem
-			b.URL = fh.rootContainerPath + container.Name + "/" + b.Name
+			b.URL = fh.generateFullPath(container) + "/" + b.Name
 			container.BlobSlice = append(container.BlobSlice, &b)
 
 		}

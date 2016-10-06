@@ -86,7 +86,7 @@ func (ah *AzureHandler) ReadBlob(container models.SimpleContainer, blobName stri
 
 // PopulateBlob. Used to read a blob IFF we already have a reference to it.
 func (ah *AzureHandler) PopulateBlob(blob *models.SimpleBlob) error {
-	azureContainerName := ah.generateAzureContainerName(blob)
+	azureContainerName := ah.generateAzureContainerName(*blob)
 	azureBlobName := blob.BlobCloudName
 
 	log.Println("AzureHandler::PopulateBlob blobname " + azureBlobName)
@@ -155,7 +155,7 @@ func (ah *AzureHandler) PopulateBlob(blob *models.SimpleBlob) error {
 }
 
 // generateAzureContainerName gets the REAL Azure container name for the simpleBlob
-func (ah *AzureHandler) generateAzureContainerName(blob *models.SimpleBlob) string {
+func (ah *AzureHandler) generateAzureContainerName(blob models.SimpleBlob) string {
 	currentContainer := blob.ParentContainer
 
 	for currentContainer.ParentContainer != nil {
@@ -164,13 +164,146 @@ func (ah *AzureHandler) generateAzureContainerName(blob *models.SimpleBlob) stri
 	return currentContainer.Name
 }
 
+func (ah *AzureHandler) WriteContainer(sourceContainer models.SimpleContainer, destContainer models.SimpleContainer) error {
+	return nil
+}
+
 // WriteBlob writes a blob to an Azure container.
 // The SimpleContainer is NOT necessarily a direct mapping to an Azure container but may be representing a virtual directory.
 // ie we might have RootSimpleContainer -> SimpleContainer(myrealcontainer) -> SimpleContainer(vdir1) -> SimpleContainer(vdir2)
 // and if the blobName is "myblob" then the REAL underlying Azure structure would be container == "myrealcontainer"
 // and the blob name is vdir/vdir2/myblob
-func (ah *AzureHandler) WriteBlob(container models.SimpleContainer, blob models.SimpleBlob) {
+func (ah *AzureHandler) WriteBlob(destContainer models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
 
+	var err error
+	if ah.cacheToDisk {
+		err = ah.writeBlobFromCache(destContainer, sourceBlob)
+	} else {
+		err = ah.writeBlobFromMemory(destContainer, sourceBlob)
+	}
+
+	if err != nil {
+		log.Fatal(err)
+		return err
+	}
+
+	return nil
+}
+
+// writeBlobFromCache.. read the cache file and pass the byte slice onto the real writer.
+func (ah *AzureHandler) writeBlobFromCache(destContainer models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
+	// file stream for cache.
+	var cacheFile *os.File
+	// need to get cache dir from somewhere!
+	cacheFile, err := os.OpenFile(ah.cacheLocation+sourceBlob.Name, os.O_RDONLY, 0)
+	if err != nil {
+		log.Fatal(err)
+		return err
+	}
+
+	buffer := make([]byte, 1024*100)
+	numBytesRead := 0
+	blockIDList := []string{}
+	finishedProcessing := false
+	for finishedProcessing == false {
+		numBytesRead, err = cacheFile.Read(buffer)
+		if err != nil {
+			finishedProcessing = true
+			log.Println("READ ERROR ", err, numBytesRead)
+		}
+
+		if numBytesRead <= 0 {
+			finishedProcessing = true
+			continue
+		}
+
+		log.Println("read ", numBytesRead)
+		blockID, err := ah.writeMemoryToBlob(destContainer.Name, sourceBlob.Name, buffer[:numBytesRead])
+		if err != nil {
+			log.Fatal("Unable to write memory to blob ", err)
+		}
+
+		blockIDList = append(blockIDList, blockID)
+	}
+
+	// finialize the blob
+	err = ah.putBlockIDList(destContainer.Name, sourceBlob.Name, blockIDList)
+	if err != nil {
+		log.Fatal("putBlockIDList failed ", err)
+	}
+
+	return nil
+}
+
+func (ah *AzureHandler) writeBlobFromMemory(destContainer models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
+
+	totalBytes := len(sourceBlob.DataInMemory)
+	bufferSize := 1024 * 100
+	buffer := make([]byte, bufferSize)
+	numBytesRead := 0
+	bytesWritten := 0
+
+	blockIDList := []string{}
+
+	for bytesWritten < totalBytes {
+
+		checkNumBytesToRead := bufferSize
+		if totalBytes-numBytesRead < bufferSize {
+			checkNumBytesToRead = totalBytes - numBytesRead
+		}
+
+		// write 100k at a time?
+		// too small? too big?
+		buffer = sourceBlob.DataInMemory[numBytesRead : numBytesRead+checkNumBytesToRead]
+
+		blockID, err := ah.writeMemoryToBlob(destContainer.Name, sourceBlob.Name, buffer)
+		if err != nil {
+			log.Fatal("Unable to write memory to blob ", err)
+		}
+
+		blockIDList = append(blockIDList, blockID)
+	}
+
+	// finialize the blob
+	err := ah.putBlockIDList(destContainer.Name, sourceBlob.Name, blockIDList)
+	if err != nil {
+		log.Fatal("putBlockIDList failed ", err)
+	}
+
+	return nil
+}
+
+func (ah *AzureHandler) putBlockIDList(containerName string, blobName string, blockIDList []string) error {
+
+	blockSlice := ah.generateBlockSlice(blockIDList)
+	if err := ah.blobStorageClient.PutBlockList(containerName, blobName, blockSlice); err != nil {
+		log.Fatal("putBlockIDList failed ", err)
+	}
+
+	return nil
+}
+
+func (ah *AzureHandler) generateBlockSlice(blockIDList []string) []storage.Block {
+	blockSlice := []storage.Block{}
+	for _, block := range blockIDList {
+		b := storage.Block{}
+		b.ID = block
+		b.Status = storage.BlockStatusLatest
+		blockSlice = append(blockSlice, b)
+	}
+	return blockSlice
+}
+
+func (ah *AzureHandler) writeMemoryToBlob(containerName string, blobName string, buffer []byte) (string, error) {
+
+	// generate hash of bytearray.
+	blockID := ""
+	err := ah.blobStorageClient.PutBlock(containerName, blobName, blockID, buffer)
+	if err != nil {
+		log.Fatal("Unable to PutBlock ", blockID)
+	}
+
+	return blockID, nil
 }
 
 func (ah *AzureHandler) CreateContainer(parentContainer models.SimpleContainer, containerName string) models.SimpleContainer {

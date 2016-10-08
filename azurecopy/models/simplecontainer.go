@@ -1,6 +1,9 @@
 package models
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 // SimpleContainer is AzureCopy's cloud agnostic version of a container
 // SimpleContainers will NOT necessarily match real cloud provider definitions of
@@ -39,6 +42,30 @@ func NewSimpleContainer() *SimpleContainer {
 	c.ParentContainer = nil
 	c.Populated = false
 	return &c
+}
+
+// GetBlob gets a reference to a blob in the container. Does NOT go recursive, recursive, recursive, recursive......
+func (sc *SimpleContainer) GetBlob(blobName string) (*SimpleBlob, error) {
+
+	for _, b := range sc.BlobSlice {
+		if b.Name == blobName {
+			return b, nil
+		}
+	}
+	err := errors.New("Blob " + blobName + " not found")
+	return nil, err
+}
+
+// GetBlob gets a reference to a blob in the container. Does NOT go recursive, recursive, recursive, recursive......
+func (sc *SimpleContainer) GetContainer(containerName string) (*SimpleContainer, error) {
+
+	for _, c := range sc.ContainerSlice {
+		if c.Name == containerName {
+			return c, nil
+		}
+	}
+	err := errors.New("Container " + containerName + " not found")
+	return nil, err
 }
 
 func (sc *SimpleContainer) DisplayContainer(padding string) {

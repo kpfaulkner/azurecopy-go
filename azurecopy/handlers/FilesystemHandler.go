@@ -64,19 +64,30 @@ func (fh *FilesystemHandler) GetRootContainer() models.SimpleContainer {
 	return *rootContainer
 }
 
-// ReadBlob reads a blob of a given name from a particular SimpleContainer and returns the SimpleBlob
-// The SimpleContainer is NOT necessarily a direct mapping to an Azure container but may be representing a virtual directory.
-// ie we might have RootSimpleContainer -> SimpleContainer(myrealcontainer) -> SimpleContainer(vdir1) -> SimpleContainer(vdir2)
-// and if the blobName is "myblob" then the REAL underlying Azure structure would be container == "myrealcontainer"
-// and the blob name is vdir/vdir2/myblob
+// ReadBlob in theory reads the blob. Given we're already dealing with a local filesystem DO we need to read it at all?
+// No point keeping it in memory, local disk is good enough. Also any point making a copy to the cache directory?
+// for now, just mark the blob as cached and point to original file dir.
 func (fh *FilesystemHandler) ReadBlob(container models.SimpleContainer, blobName string) models.SimpleBlob {
 	var blob models.SimpleBlob
 
+	dirPath := fh.generateFullPath(&container)
+	fullPath := dirPath + "/" + blobName
+
+	blob.DataCachedAtPath = fullPath
+	blob.BlobInMemory = false
+	blob.Name = blobName
+	blob.ParentContainer = &container
+	blob.Origin = container.Origin
+	blob.URL = fullPath
 	return blob
 }
 
 // PopulateBlob. Used to read a blob IFF we already have a reference to it.
 func (fh *FilesystemHandler) PopulateBlob(blob *models.SimpleBlob) error {
+
+	blob.DataCachedAtPath = blob.URL
+	blob.BlobInMemory = false
+
 	return nil
 }
 
@@ -91,11 +102,11 @@ func (fh *FilesystemHandler) generateAzureContainerName(blob *models.SimpleBlob)
 // ie we might have RootSimpleContainer -> SimpleContainer(myrealcontainer) -> SimpleContainer(vdir1) -> SimpleContainer(vdir2)
 // and if the blobName is "myblob" then the REAL underlying Azure structure would be container == "myrealcontainer"
 // and the blob name is vdir/vdir2/myblob
-func (fh *FilesystemHandler) WriteBlob(container models.SimpleContainer, blob *models.SimpleBlob) error {
+func (fh *FilesystemHandler) WriteBlob(container *models.SimpleContainer, blob *models.SimpleBlob) error {
 	return nil
 }
 
-func (fh *FilesystemHandler) WriteContainer(sourceContainer models.SimpleContainer, destContainer models.SimpleContainer) error {
+func (fh *FilesystemHandler) WriteContainer(sourceContainer *models.SimpleContainer, destContainer *models.SimpleContainer) error {
 	return nil
 }
 

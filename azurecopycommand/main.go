@@ -3,6 +3,7 @@ package main
 import (
 	"azurecopy/azurecopy"
 	"azurecopy/azurecopy/models"
+	"log"
 )
 
 // "so it begins"
@@ -16,11 +17,20 @@ func main() {
 		if c.Name == "autorest" {
 			ac.GetContainerContents(c)
 
-			// now get subdir.
-			subDir := c.ContainerSlice[0]
-			ac.GetContainerContents(subDir)
+			blob, err := c.GetBlob("AutoRest.exe")
+			if err != nil {
+				log.Fatal(err)
+			}
+			azureRootContainer := ac.GetRootContainer(models.Azure)
 
-			c.DisplayContainer("")
+			ac.ReadBlob(blob)
+
+			tempContainer, err := azureRootContainer.GetContainer("temp")
+			if err != nil {
+				log.Fatal("GetContainer ", err)
+			}
+
+			ac.WriteBlob(tempContainer, blob)
 		}
 	}
 

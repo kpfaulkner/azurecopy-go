@@ -104,8 +104,9 @@ func (ah *AzureHandler) PopulateBlob(blob *models.SimpleBlob) error {
 
 	// populate this to disk.
 	if ah.cacheToDisk {
-		// need to get cache dir from somewhere!
-		cacheFile, err = os.OpenFile(ah.cacheLocation+blob.Name, os.O_WRONLY|os.O_CREATE, 0)
+
+		blob.DataCachedAtPath = ah.cacheLocation + blob.Name
+		cacheFile, err = os.OpenFile(blob.DataCachedAtPath, os.O_WRONLY|os.O_CREATE, 0)
 
 		if err != nil {
 			log.Fatal(err)
@@ -164,7 +165,7 @@ func (ah *AzureHandler) generateAzureContainerName(blob models.SimpleBlob) strin
 	return currentContainer.Name
 }
 
-func (ah *AzureHandler) WriteContainer(sourceContainer models.SimpleContainer, destContainer models.SimpleContainer) error {
+func (ah *AzureHandler) WriteContainer(sourceContainer *models.SimpleContainer, destContainer *models.SimpleContainer) error {
 	return nil
 }
 
@@ -173,7 +174,7 @@ func (ah *AzureHandler) WriteContainer(sourceContainer models.SimpleContainer, d
 // ie we might have RootSimpleContainer -> SimpleContainer(myrealcontainer) -> SimpleContainer(vdir1) -> SimpleContainer(vdir2)
 // and if the blobName is "myblob" then the REAL underlying Azure structure would be container == "myrealcontainer"
 // and the blob name is vdir/vdir2/myblob
-func (ah *AzureHandler) WriteBlob(destContainer models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
+func (ah *AzureHandler) WriteBlob(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
 
 	var err error
 	if ah.cacheToDisk {
@@ -191,11 +192,13 @@ func (ah *AzureHandler) WriteBlob(destContainer models.SimpleContainer, sourceBl
 }
 
 // writeBlobFromCache.. read the cache file and pass the byte slice onto the real writer.
-func (ah *AzureHandler) writeBlobFromCache(destContainer models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
+func (ah *AzureHandler) writeBlobFromCache(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
+
+	log.Println("writeBlobFromCache " + sourceBlob.DataCachedAtPath)
 	// file stream for cache.
 	var cacheFile *os.File
 	// need to get cache dir from somewhere!
-	cacheFile, err := os.OpenFile(ah.cacheLocation+sourceBlob.Name, os.O_RDONLY, 0)
+	cacheFile, err := os.OpenFile(sourceBlob.DataCachedAtPath, os.O_RDONLY, 0)
 	if err != nil {
 		log.Fatal(err)
 		return err
@@ -235,7 +238,7 @@ func (ah *AzureHandler) writeBlobFromCache(destContainer models.SimpleContainer,
 	return nil
 }
 
-func (ah *AzureHandler) writeBlobFromMemory(destContainer models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
+func (ah *AzureHandler) writeBlobFromMemory(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
 
 	totalBytes := len(sourceBlob.DataInMemory)
 	bufferSize := 1024 * 100

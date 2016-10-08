@@ -23,10 +23,10 @@ type CloudHandlerInterface interface {
 	PopulateBlob(blob *models.SimpleBlob) error
 
 	// given a container and blob, write blob.
-	WriteBlob(container models.SimpleContainer, blob *models.SimpleBlob) error
+	WriteBlob(container *models.SimpleContainer, blob *models.SimpleBlob) error
 
 	// write a container (and subcontents) to the appropriate data store
-	WriteContainer(sourceContainer models.SimpleContainer, destContainer models.SimpleContainer) error
+	WriteContainer(sourceContainer *models.SimpleContainer, destContainer *models.SimpleContainer) error
 
 	// Gets a container. Populating the subtree? OR NOT? hmmmm
 	GetContainer(containerName string) models.SimpleContainer

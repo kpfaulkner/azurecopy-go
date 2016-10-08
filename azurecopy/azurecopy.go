@@ -57,3 +57,13 @@ func (ac *AzureCopy) ReadBlob(blob *models.SimpleBlob) {
 
 	}
 }
+
+// WriteBlob writes a source blob (can be from anywhere) to a destination container (can and probably will be a different cloud platform)
+func (ac *AzureCopy) WriteBlob(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
+	handler := utils.GetHandler(destContainer.Origin, ac.UseEmulator, true)
+
+	if err := handler.WriteBlob(destContainer, sourceBlob); err != nil {
+		log.Fatal("WriteBlob kaboom ", err)
+	}
+	return nil
+}

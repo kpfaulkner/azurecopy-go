@@ -3,6 +3,8 @@ package handlers
 import (
 	"azurecopy/azurecopy/models"
 	"azurecopy/azurecopy/utils/azurehelper"
+	"crypto/sha1"
+	"encoding/hex"
 	"log"
 	"os"
 	"strings"
@@ -116,8 +118,8 @@ func (ah *AzureHandler) PopulateBlob(blob *models.SimpleBlob) error {
 		blob.DataInMemory = []byte{}
 	}
 
-	// 10k buffer... way too small?
-	buffer := make([]byte, 1024*10)
+	// 100k buffer... way too small?
+	buffer := make([]byte, 1024*100)
 	numBytesRead := 0
 
 	finishedProcessing := false
@@ -133,8 +135,8 @@ func (ah *AzureHandler) PopulateBlob(blob *models.SimpleBlob) error {
 			continue
 		}
 
-		log.Println("read ", numBytesRead)
-
+		log.Println("XX read ", numBytesRead)
+		log.Println("buffer length ", len(buffer))
 		// if we're caching, write to a file.
 		if ah.cacheToDisk {
 			_, err = cacheFile.Write(buffer[:numBytesRead])
@@ -176,6 +178,7 @@ func (ah *AzureHandler) WriteContainer(sourceContainer *models.SimpleContainer, 
 // and the blob name is vdir/vdir2/myblob
 func (ah *AzureHandler) WriteBlob(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
 
+	log.Println("AzureHandler::WriteBlob")
 	var err error
 	if ah.cacheToDisk {
 		err = ah.writeBlobFromCache(destContainer, sourceBlob)
@@ -213,6 +216,7 @@ func (ah *AzureHandler) writeBlobFromCache(destContainer *models.SimpleContainer
 		if err != nil {
 			finishedProcessing = true
 			log.Println("READ ERROR ", err, numBytesRead)
+			continue
 		}
 
 		if numBytesRead <= 0 {
@@ -220,7 +224,8 @@ func (ah *AzureHandler) writeBlobFromCache(destContainer *models.SimpleContainer
 			continue
 		}
 
-		log.Println("read ", numBytesRead)
+		log.Println("YYread ", numBytesRead)
+		log.Println("buffer length ", len(buffer))
 		blockID, err := ah.writeMemoryToBlob(destContainer.Name, sourceBlob.Name, buffer[:numBytesRead])
 		if err != nil {
 			log.Fatal("Unable to write memory to blob ", err)
@@ -278,6 +283,7 @@ func (ah *AzureHandler) writeBlobFromMemory(destContainer *models.SimpleContaine
 
 func (ah *AzureHandler) putBlockIDList(containerName string, blobName string, blockIDList []string) error {
 
+	log.Println("AzureHandler::putBlockIDList")
 	blockSlice := ah.generateBlockSlice(blockIDList)
 	if err := ah.blobStorageClient.PutBlockList(containerName, blobName, blockSlice); err != nil {
 		log.Fatal("putBlockIDList failed ", err)
@@ -301,6 +307,12 @@ func (ah *AzureHandler) writeMemoryToBlob(containerName string, blobName string,
 
 	// generate hash of bytearray.
 	blockID := ""
+
+	hasher := sha1.New()
+	hasher.Write(buffer)
+	blockID = hex.EncodeToString(hasher.Sum(nil))
+
+	log.Println("Creating blockID ", blockID)
 	err := ah.blobStorageClient.PutBlock(containerName, blobName, blockID, buffer)
 	if err != nil {
 		log.Fatal("Unable to PutBlock ", blockID)

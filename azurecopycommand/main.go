@@ -14,10 +14,10 @@ func main() {
 	rootContainer := ac.GetRootContainer(models.Filesystem)
 
 	for _, c := range rootContainer.ContainerSlice {
-		if c.Name == "autorest" {
+		if c.Name == "img" {
 			ac.GetContainerContents(c)
 
-			blob, err := c.GetBlob("AutoRest.exe")
+			blob, err := c.GetBlob("F9.JPG")
 			if err != nil {
 				log.Fatal(err)
 			}

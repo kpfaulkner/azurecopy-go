@@ -98,15 +98,84 @@ func (fh *FilesystemHandler) generateAzureContainerName(blob *models.SimpleBlob)
 }
 
 // WriteBlob writes a blob to an Azure container.
-// The SimpleContainer is NOT necessarily a direct mapping to an Azure container but may be representing a virtual directory.
+// The SimpleContainer is NOT necessarily a direct mapping to an Azure container but may be representiing a virtual directory.
 // ie we might have RootSimpleContainer -> SimpleContainer(myrealcontainer) -> SimpleContainer(vdir1) -> SimpleContainer(vdir2)
 // and if the blobName is "myblob" then the REAL underlying Azure structure would be container == "myrealcontainer"
 // and the blob name is vdir/vdir2/myblob
-func (fh *FilesystemHandler) WriteBlob(container *models.SimpleContainer, blob *models.SimpleBlob) error {
+func (fh *FilesystemHandler) WriteBlob(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
+	log.Println("FilesystemHandler::WriteBlob ", sourceBlob.Name)
+
+	fullPath := fh.generateFullPath(destContainer) + "/" + sourceBlob.Name
+
+	if !sourceBlob.BlobInMemory {
+		err := fh.copyFile(sourceBlob.DataCachedAtPath, fullPath)
+
+		if err != nil {
+			log.Fatal("FilesystemHandler::WriteBlob err ", err)
+		}
+	} else {
+		// from memory.
+		newFile, err := os.OpenFile(fullPath, os.O_WRONLY|os.O_CREATE, 0)
+		if err != nil {
+			log.Fatal("FilesystemHandler::WriteBlob unable to open destination file", err)
+		}
+
+		var totalBytesWritten int = 0
+		fileSize := len(sourceBlob.DataInMemory)
+
+		for totalBytesWritten < fileSize {
+			bytesWritten, err := newFile.Write(sourceBlob.DataInMemory[totalBytesWritten:])
+
+			if err != nil {
+				log.Fatal("FilesystemHandler::WriteBlob unable to open destination file", err)
+			}
+			totalBytesWritten += bytesWritten
+		}
+	}
+
+	return nil
+}
+
+func (fh *FilesystemHandler) copyFile(sourceFile string, destFile string) error {
+	cacheFile, err := os.OpenFile(sourceFile, os.O_RDONLY, 0)
+	if err != nil {
+		log.Fatal("FilesystemHandler::WriteBlob err ", err)
+	}
+
+	// location of destination blob.
+	fullPath := destFile
+	newFile, err := os.OpenFile(fullPath, os.O_WRONLY|os.O_CREATE, 0)
+	if err != nil {
+		log.Fatal("FilesystemHandler::WriteBlob unable to open destination file", err)
+	}
+
+	buffer := make([]byte, 1024*100)
+	numBytesRead := 0
+
+	finishedProcessing := false
+	for finishedProcessing == false {
+		numBytesRead, err = cacheFile.Read(buffer)
+		if err != nil {
+			finishedProcessing = true
+		}
+
+		if numBytesRead <= 0 {
+			finishedProcessing = true
+			continue
+		}
+
+		_, err = newFile.Write(buffer[:numBytesRead])
+		if err != nil {
+			log.Fatal(err)
+			return err
+		}
+	}
+
 	return nil
 }
 
 func (fh *FilesystemHandler) WriteContainer(sourceContainer *models.SimpleContainer, destContainer *models.SimpleContainer) error {
+
 	return nil
 }
 

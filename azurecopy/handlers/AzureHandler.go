@@ -127,7 +127,6 @@ func (ah *AzureHandler) PopulateBlob(blob *models.SimpleBlob) error {
 		numBytesRead, err = sr.Read(buffer)
 		if err != nil {
 			finishedProcessing = true
-			log.Println("READ ERROR ", err, numBytesRead)
 		}
 
 		if numBytesRead <= 0 {
@@ -135,8 +134,6 @@ func (ah *AzureHandler) PopulateBlob(blob *models.SimpleBlob) error {
 			continue
 		}
 
-		log.Println("XX read ", numBytesRead)
-		log.Println("buffer length ", len(buffer))
 		// if we're caching, write to a file.
 		if ah.cacheToDisk {
 			_, err = cacheFile.Write(buffer[:numBytesRead])
@@ -215,7 +212,6 @@ func (ah *AzureHandler) writeBlobFromCache(destContainer *models.SimpleContainer
 		numBytesRead, err = cacheFile.Read(buffer)
 		if err != nil {
 			finishedProcessing = true
-			log.Println("READ ERROR ", err, numBytesRead)
 			continue
 		}
 
@@ -223,8 +219,6 @@ func (ah *AzureHandler) writeBlobFromCache(destContainer *models.SimpleContainer
 			finishedProcessing = true
 			continue
 		}
-
-		log.Println("YYread ", numBytesRead)
 		log.Println("buffer length ", len(buffer))
 		blockID, err := ah.writeMemoryToBlob(destContainer.Name, sourceBlob.Name, buffer[:numBytesRead])
 		if err != nil {

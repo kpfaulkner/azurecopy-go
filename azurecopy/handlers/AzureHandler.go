@@ -5,6 +5,7 @@ import (
 	"azurecopy/azurecopy/utils/azurehelper"
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
 	"log"
 	"os"
 	"strings"
@@ -73,6 +74,107 @@ func (ah *AzureHandler) GetRootContainer() models.SimpleContainer {
 	}
 
 	return *rootContainer
+}
+
+// GetSpecificSimpleContainer given a URL (ending in /) then get the SIMPLE container that represents it.
+func (ah *AzureHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleContainer, error) {
+
+	lastChar := URL[len(URL)-1:]
+	// MUST be a better way to get the last character.
+	if lastChar != "/" {
+		return nil, errors.New("Needs to end with a /")
+	}
+
+	accountName, containerName, blobPrefix, err := ah.validateURL(URL)
+	if err != nil {
+		log.Fatal("GetSpecificSimpleContainer err", err)
+	}
+
+	container, err := ah.getAzureContainer(containerName)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// hackery... but is this fine for this purpose?
+	// generate containers for the blob prefix.
+	subContainer := ah.generateSubContainers(blobPrefix)
+
+	container.ContainerSlice = append(container.ContainerSlice, subContainer)
+
+	log.Println(accountName)
+
+	return nil, nil
+}
+
+func (ah *AzureHandler) generateSubContainers(blobPrefix string) *models.SimpleContainer {
+
+	var containerToReturn *models.SimpleContainer
+	var lastContainer *models.SimpleContainer
+	doneFirst := false
+
+	// strip off last /
+	blobPrefix = blobPrefix[:len(blobPrefix)-1]
+
+	sp := strings.Split(blobPrefix, "/")
+	for _, segment := range sp {
+		container := models.NewSimpleContainer()
+		container.Name = segment
+		if !doneFirst {
+			containerToReturn = container
+			doneFirst = true
+		} else {
+			lastContainer.ContainerSlice = append(lastContainer.ContainerSlice, container)
+		}
+
+		lastContainer = container
+	}
+
+	return containerToReturn
+}
+
+func (ah *AzureHandler) getAzureContainer(containerName string) (*models.SimpleContainer, error) {
+	rootContainer := ah.GetRootContainer()
+
+	for _, container := range rootContainer.ContainerSlice {
+		if container.Name == containerName {
+			return container, nil
+		}
+	}
+
+	return nil, errors.New("Unable to find container")
+
+}
+
+// GetSpecificSimpleBlob given a URL (NOT ending in /) then get the SIMPLE blob that represents it.
+func (ah *AzureHandler) GetSpecificSimpleBlob(URL string) (*models.SimpleBlob, error) {
+	// MUST be a better way to get the last character.
+	if URL[len(URL)-2:len(URL)-1] == "/" {
+		return nil, errors.New("Cannot end with a /")
+	}
+
+	return nil, nil
+}
+
+// validateURL returns accountName, container Name, blob Name and error
+func (ah *AzureHandler) validateURL(URL string) (string, string, string, error) {
+
+	azurePrefix := "azure://"
+
+	lowerURL := strings.ToLower(URL)
+
+	if lowerURL[0:len(azurePrefix)] != azurePrefix {
+		return "", "", "", errors.New("Invalid Azure prefix")
+	}
+
+	// trim azure://
+	lowerURL = lowerURL[len(azurePrefix):]
+	sp := strings.Split(lowerURL, "/")
+
+	accountName := sp[0]
+	containerName := sp[1]
+	blobName := strings.Join(sp[2:], "/")
+
+	return accountName, containerName, blobName, nil
 }
 
 // ReadBlob reads a blob of a given name from a particular SimpleContainer and returns the SimpleBlob
@@ -191,8 +293,20 @@ func (ah *AzureHandler) WriteBlob(destContainer *models.SimpleContainer, sourceB
 	return nil
 }
 
+func (ah *AzureHandler) getContainerAndBlobNames(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) (string, string) {
+
+	azureContainer, blobPrefix := azurehelper.GetContainerAndBlobPrefix(destContainer)
+	azureContainerName := azureContainer.Name
+
+	azureBlobName := blobPrefix + "/" + sourceBlob.Name
+
+	return azureContainerName, azureBlobName
+}
+
 // writeBlobFromCache.. read the cache file and pass the byte slice onto the real writer.
 func (ah *AzureHandler) writeBlobFromCache(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
+
+	azureContainerName, azureBlobName := ah.getContainerAndBlobNames(destContainer, sourceBlob)
 
 	log.Println("writeBlobFromCache " + sourceBlob.DataCachedAtPath)
 	// file stream for cache.
@@ -220,7 +334,7 @@ func (ah *AzureHandler) writeBlobFromCache(destContainer *models.SimpleContainer
 			continue
 		}
 		log.Println("buffer length ", len(buffer))
-		blockID, err := ah.writeMemoryToBlob(destContainer.Name, sourceBlob.Name, buffer[:numBytesRead])
+		blockID, err := ah.writeMemoryToBlob(azureContainerName, azureBlobName, buffer[:numBytesRead])
 		if err != nil {
 			log.Fatal("Unable to write memory to blob ", err)
 		}
@@ -238,6 +352,8 @@ func (ah *AzureHandler) writeBlobFromCache(destContainer *models.SimpleContainer
 }
 
 func (ah *AzureHandler) writeBlobFromMemory(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
+
+	azureContainerName, azureBlobName := ah.getContainerAndBlobNames(destContainer, sourceBlob)
 
 	totalBytes := len(sourceBlob.DataInMemory)
 	bufferSize := 1024 * 100
@@ -258,7 +374,7 @@ func (ah *AzureHandler) writeBlobFromMemory(destContainer *models.SimpleContaine
 		// too small? too big?
 		buffer = sourceBlob.DataInMemory[numBytesRead : numBytesRead+checkNumBytesToRead]
 
-		blockID, err := ah.writeMemoryToBlob(destContainer.Name, sourceBlob.Name, buffer)
+		blockID, err := ah.writeMemoryToBlob(azureContainerName, azureBlobName, buffer)
 		if err != nil {
 			log.Fatal("Unable to write memory to blob ", err)
 		}

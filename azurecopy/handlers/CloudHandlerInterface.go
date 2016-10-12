@@ -16,6 +16,12 @@ type CloudHandlerInterface interface {
 	// create container.
 	CreateContainer(parentContainer models.SimpleContainer, containerName string) models.SimpleContainer
 
+	// GetSpecificSimpleContainer given a URL (ending in /) then get the SIMPLE container that represents it.
+	GetSpecificSimpleContainer(URL string) (*models.SimpleContainer, error)
+
+	// GetSpecificSimpleBlob given a URL (NOT ending in /) then get the SIMPLE blob that represents it.
+	GetSpecificSimpleBlob(URL string) (*models.SimpleBlob, error)
+
 	// given a container and a blob name, read the blob.
 	ReadBlob(container models.SimpleContainer, blobName string) models.SimpleBlob
 

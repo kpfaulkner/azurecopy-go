@@ -1,9 +1,11 @@
 package azurecopy
 
 import (
+	"azurecopy/azurecopy/handlers"
 	"azurecopy/azurecopy/models"
 	"azurecopy/azurecopy/utils"
 	"log"
+	"strings"
 )
 
 // AzureCopy main client class.
@@ -28,6 +30,52 @@ func NewAzureCopy(useEmulator bool) *AzureCopy {
 	ac.UseEmulator = useEmulator
 
 	return &ac
+}
+
+func (ac *AzureCopy) getCloudType(url string) models.CloudType {
+	lowerURL := strings.ToLower(url)
+
+	if lowerURL[0:6] == "azure" {
+		return models.Azure
+	}
+	return models.Filesystem
+}
+
+// CopyBlobByUrl copy a blob from one URL to another.
+// TODO(kpfaulkner) need to figure out cache and emulator params here.
+func (ac *AzureCopy) CopyBlobByUrl(sourceURL string, destURL string) error {
+
+	ah, err := handlers.NewAzureHandler(true, true)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	data, err := ah.GetSpecificSimpleContainer(sourceURL)
+
+	log.Println(data, err)
+
+	/*
+		sourceHandler := ac.GetHandlerForURL(sourceURL, true, true)
+		destHandler := ac.GetHandlerForURL(destURL, true, true)
+
+		sourceBlob, err := sourceHandler.ReadDirectBlob(sourceURL)
+		if err != nil {
+			log.Panic("CopyBlobByUrl failed %s to %s", sourceURL, destURL)
+		}
+
+		err = destHandler.WriteDirectBlob(sourceBlob, destURL)
+		if err != nil {
+			log.Fatal("Writing blob to %s failed", destURL)
+		}*/
+
+	return nil
+}
+
+// GetHandlerForURL returns the appropriate handler for a given cloud type.
+func (ac *AzureCopy) GetHandlerForURL(url string, useEmulator bool, cacheToDisk bool) handlers.CloudHandlerInterface {
+	cloudType := ac.getCloudType(url)
+	handler := utils.GetHandler(cloudType, useEmulator, cacheToDisk)
+	return handler
 }
 
 // GetRootContainer get the root container (and immediate containers/blobs)

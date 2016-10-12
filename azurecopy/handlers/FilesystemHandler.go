@@ -264,3 +264,15 @@ func (fh *FilesystemHandler) getSubContainer(container *models.SimpleContainer, 
 	newContainer := models.SimpleContainer{}
 	return &newContainer
 }
+
+// GetSpecificSimpleContainer given a URL (ending in /) then get the SIMPLE container that represents it.
+func (fh *FilesystemHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleContainer, error) {
+
+	return nil, nil
+}
+
+// GetSpecificSimpleBlob given a URL (NOT ending in /) then get the SIMPLE blob that represents it.
+func (fh *FilesystemHandler) GetSpecificSimpleBlob(URL string) (*models.SimpleBlob, error) {
+	return nil, nil
+
+}

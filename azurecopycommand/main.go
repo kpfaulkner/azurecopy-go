@@ -34,9 +34,7 @@ func FSToAzure() {
 
 }
 
-// "so it begins"
-func main() {
-
+func messingABout() {
 	ac := azurecopy.NewAzureCopy(true)
 
 	azureRootContainer := ac.GetRootContainer(models.Azure)
@@ -61,5 +59,22 @@ func main() {
 			ac.WriteBlob(tempContainer, blob)
 		}
 	}
+
+}
+
+// "so it begins"
+func main() {
+
+	// need to figure out how to read/parse args properly.
+	/*	source := os.Args[1]
+		dest := os.Args[2]
+
+		fmt.Printf("Copying %s to %s", source, dest)
+	*/
+	ac := azurecopy.NewAzureCopy(true)
+
+	err := ac.CopyBlobByUrl("azure://kenfau/temp/vdir1/vdir2/", "")
+
+	log.Println(err)
 
 }

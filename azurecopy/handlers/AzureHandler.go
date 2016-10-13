@@ -77,6 +77,9 @@ func (ah *AzureHandler) GetRootContainer() models.SimpleContainer {
 }
 
 // GetSpecificSimpleContainer given a URL (ending in /) then get the SIMPLE container that represents it.
+// returns the container of the last most part of the url.
+// eg. if the url was azure://myacct/realazurecontainer/vdir1/vdir2/  then the simple container
+// returned is vdir.
 func (ah *AzureHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleContainer, error) {
 
 	lastChar := URL[len(URL)-1:]
@@ -85,7 +88,7 @@ func (ah *AzureHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleCo
 		return nil, errors.New("Needs to end with a /")
 	}
 
-	accountName, containerName, blobPrefix, err := ah.validateURL(URL)
+	_, containerName, blobPrefix, err := ah.validateURL(URL)
 	if err != nil {
 		log.Fatal("GetSpecificSimpleContainer err", err)
 	}
@@ -95,18 +98,15 @@ func (ah *AzureHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleCo
 		log.Fatal(err)
 	}
 
-	// hackery... but is this fine for this purpose?
-	// generate containers for the blob prefix.
-	subContainer := ah.generateSubContainers(blobPrefix)
+	subContainer, lastContainer := ah.generateSubContainers(container, blobPrefix)
 
 	container.ContainerSlice = append(container.ContainerSlice, subContainer)
 
-	log.Println(accountName)
-
-	return nil, nil
+	// return the "deepest" container.
+	return lastContainer, nil
 }
 
-func (ah *AzureHandler) generateSubContainers(blobPrefix string) *models.SimpleContainer {
+func (ah *AzureHandler) generateSubContainers(azureContainer *models.SimpleContainer, blobPrefix string) (*models.SimpleContainer, *models.SimpleContainer) {
 
 	var containerToReturn *models.SimpleContainer
 	var lastContainer *models.SimpleContainer
@@ -120,16 +120,18 @@ func (ah *AzureHandler) generateSubContainers(blobPrefix string) *models.SimpleC
 		container := models.NewSimpleContainer()
 		container.Name = segment
 		if !doneFirst {
+			container.ParentContainer = azureContainer
 			containerToReturn = container
 			doneFirst = true
 		} else {
+			container.ParentContainer = lastContainer
 			lastContainer.ContainerSlice = append(lastContainer.ContainerSlice, container)
 		}
 
 		lastContainer = container
 	}
 
-	return containerToReturn
+	return containerToReturn, lastContainer
 }
 
 func (ah *AzureHandler) getAzureContainer(containerName string) (*models.SimpleContainer, error) {
@@ -457,7 +459,7 @@ func (ah *AzureHandler) GetContainerContents(container *models.SimpleContainer, 
 
 	// now we have the azure container and the prefix, we should be able to get a list of
 	// SimpleContainers and SimpleBlobs to add this to original container.
-	params := storage.ListBlobsParameters{}
+	params := storage.ListBlobsParameters{Prefix: blobPrefix}
 
 	log.Println(blobPrefix)
 
@@ -467,7 +469,7 @@ func (ah *AzureHandler) GetContainerContents(container *models.SimpleContainer, 
 		log.Fatal("Error")
 	}
 
-	ah.populateSimpleContainer(blobListResponse, container)
+	ah.populateSimpleContainer(blobListResponse, azureContainer)
 }
 
 // populateSimpleContainer takes a list of Azure blobs and breaks them into virtual directories (SimpleContainers) and

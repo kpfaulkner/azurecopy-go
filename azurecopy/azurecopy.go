@@ -49,24 +49,10 @@ func (ac *AzureCopy) CopyBlobByUrl(sourceURL string, destURL string) error {
 	if err != nil {
 		log.Fatal(err)
 	}
+	deepestContainer, err := ah.GetSpecificSimpleContainer(sourceURL)
 
-	data, err := ah.GetSpecificSimpleContainer(sourceURL)
-
-	log.Println(data, err)
-
-	/*
-		sourceHandler := ac.GetHandlerForURL(sourceURL, true, true)
-		destHandler := ac.GetHandlerForURL(destURL, true, true)
-
-		sourceBlob, err := sourceHandler.ReadDirectBlob(sourceURL)
-		if err != nil {
-			log.Panic("CopyBlobByUrl failed %s to %s", sourceURL, destURL)
-		}
-
-		err = destHandler.WriteDirectBlob(sourceBlob, destURL)
-		if err != nil {
-			log.Fatal("Writing blob to %s failed", destURL)
-		}*/
+	// get the blobs for the deepest vdir which is part of the URL.
+	ah.GetContainerContents(deepestContainer, true)
 
 	return nil
 }

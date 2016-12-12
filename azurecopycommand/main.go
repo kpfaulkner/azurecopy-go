@@ -73,7 +73,7 @@ func main() {
 	*/
 	ac := azurecopy.NewAzureCopy(true)
 
-	err := ac.CopyBlobByUrl("azure://kenfau/temp/vdir1/", "")
+	err := ac.CopyBlobByURL("http://127.0.0.1:10000/devaccount/devaccount/temp/", "c:/temp/temp/")
 
 	log.Println(err)
 

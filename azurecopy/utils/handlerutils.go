@@ -3,6 +3,7 @@ package utils
 import (
 	"azurecopy/azurecopy/handlers"
 	"azurecopy/azurecopy/models"
+	"log"
 )
 
 // GetHandler gets the appropriate handler for the cloudtype.
@@ -10,11 +11,33 @@ import (
 func GetHandler(cloudType models.CloudType, useEmulator bool, cacheToDisk bool) handlers.CloudHandlerInterface {
 	switch cloudType {
 	case models.Azure:
+
+		log.Print("Got Azure Handler")
 		ah, _ := handlers.NewAzureHandler(useEmulator, cacheToDisk)
 		return ah
 
 	case models.Filesystem:
-		fh, _ := handlers.NewFilesystemHandler("C:/temp/")
+		log.Print("Got Filesystem Handler")
+		fh, _ := handlers.NewFilesystemHandler("c:/temp/") // default path?
+		return fh
+	}
+
+	return nil
+}
+
+// GetHandler gets the appropriate handler for the cloudtype.
+// Should I be doing this another way?
+func GetHandlerWithPathInfo(cloudType models.CloudType, useEmulator bool, cacheToDisk bool, pathInfo string) handlers.CloudHandlerInterface {
+	switch cloudType {
+	case models.Azure:
+
+		log.Print("Got Azure Handler")
+		ah, _ := handlers.NewAzureHandler(useEmulator, cacheToDisk)
+		return ah
+
+	case models.Filesystem:
+		log.Print("Got Filesystem Handler")
+		fh, _ := handlers.NewFilesystemHandler(pathInfo)
 		return fh
 	}
 

@@ -27,6 +27,8 @@ func NewFilesystemHandler(rootContainerPath string) (*FilesystemHandler, error) 
 // that has the containerSlice populated with the real Azure containers.
 func (fh *FilesystemHandler) GetRootContainer() models.SimpleContainer {
 
+	log.Printf("FS:GetRootContainer %s", fh.rootContainerPath)
+
 	dir, err := os.OpenFile(fh.rootContainerPath, os.O_RDONLY, 0)
 	if err != nil {
 		log.Fatal("ERR OpenFile ", err)
@@ -38,6 +40,9 @@ func (fh *FilesystemHandler) GetRootContainer() models.SimpleContainer {
 	}
 
 	rootContainer := models.NewSimpleContainer()
+	rootContainer.URL = fh.rootContainerPath
+	rootContainer.Origin = models.Filesystem
+
 	for _, f := range fileInfos {
 
 		// determine if file or directory.
@@ -49,7 +54,6 @@ func (fh *FilesystemHandler) GetRootContainer() models.SimpleContainer {
 			sc.ParentContainer = rootContainer
 			sc.Populated = false
 			rootContainer.ContainerSlice = append(rootContainer.ContainerSlice, sc)
-
 		} else {
 			b := models.SimpleBlob{}
 			b.Name = f.Name()
@@ -208,6 +212,7 @@ func (fh *FilesystemHandler) generateFullPath(container *models.SimpleContainer)
 // currently wont do recursive.
 func (fh *FilesystemHandler) GetContainerContents(container *models.SimpleContainer, useEmulator bool) {
 
+	log.Printf("filesystem container %s", container.Name)
 	fullPath := fh.generateFullPath(container)
 	dir, err := os.OpenFile(fullPath, os.O_RDONLY, 0)
 	if err != nil {
@@ -266,9 +271,14 @@ func (fh *FilesystemHandler) getSubContainer(container *models.SimpleContainer, 
 }
 
 // GetSpecificSimpleContainer given a URL (ending in /) then get the SIMPLE container that represents it.
+// eg. c:\temp\mydir1\mydir2\
 func (fh *FilesystemHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleContainer, error) {
 
-	return nil, nil
+	// TODO(kpfaulkner)
+	// is this really it? Do we need to go into sub dirs?
+	fh.rootContainerPath = URL
+	rootContainer := fh.GetRootContainer()
+	return &rootContainer, nil
 }
 
 // GetSpecificSimpleBlob given a URL (NOT ending in /) then get the SIMPLE blob that represents it.

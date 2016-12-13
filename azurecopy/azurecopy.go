@@ -10,27 +10,63 @@ import (
 	"strings"
 )
 
+// misc consts for credentials.
+// need a more dynamic way to add for new cloud types.
+// but for now, it will do.
+const (
+	// Azure.
+	AzureDefaultAccountName = "AzureDefaultAccountName"
+	AzureDefaultAccountKey  = "AzureDefaultAccountKey"
+	AzureSourceAccountName  = "AzureSourceAccountName"
+	AzureSourceAccountKey   = "AzureSourceAccountKey"
+	AzureDestAccountName    = "AzureDestAccountName"
+	AzureDestAccountKey     = "AzureDestAccountKey"
+
+	// S3
+	S3DefaultAccessID     = "S3DefaultAccessID"
+	S3DefaultAccessSecret = "S3DefaultAccessSecret"
+	S3SourceAccessID      = "S3SourceAccessID"
+	S3SourceAccessSecret  = "S3SourceAccessSecret"
+	S3DestAccessID        = "S3DestAccessID"
+	S3DestAccessSecret    = "S3DestAccessSecret"
+)
+
 // AzureCopy main client class.
+// Have one instance of this PER cloud env.
+// ie one for source and one for destination.
 type AzureCopy struct {
 
-	// list of blobs.
-	BlobSlice []models.SimpleBlob
+	// credentials used for various handlers.
+	// main application will pass these in.
+	credentials map[string]string
 
-	// list of containers.
-	ContainerSlice []models.SimpleContainer
+	// source/destination URLS
+	sourceURL string
+	destURL   string
 
-	// are we using an emualtor?
-	UseEmulator bool
+	// cloud types
+	sourceCloudType models.CloudType
+	destCloudType   models.CloudType
+
+	// handlers
+	sourceHandler handlers.CloudHandlerInterface
+	destHandler handlers.CloudHandlerInterface
 }
 
 // NewAzureCopy factory time!
-func NewAzureCopy(useEmulator bool) *AzureCopy {
+// want to know source/dest up front.
+func NewAzureCopy(sourceURL string, destURL string) *AzureCopy {
 	ac := AzureCopy{}
+	ac.destURL = destURL
+	ac.sourceURL = sourceURL
 
-	ac.BlobSlice = []models.SimpleBlob{}
-	ac.ContainerSlice = []models.SimpleContainer{}
-	ac.UseEmulator = useEmulator
+	ac.sourceCloudType = ac.getCloudType(ac.sourceURL)
+	ac.destCloudType = ac.getCloudType(ac.destURL)
 
+	ac.sourceHandler := ac.GetHandlerForURL(ac.sourceURL, true)
+	ac.destHandler := ac.GetHandlerForURL(ac.destURL, true)
+
+	ac.credentials = make(map[string]string)
 	return &ac
 }
 
@@ -68,7 +104,6 @@ func (ac *AzureCopy) getCloudType(url string) (cloudType models.CloudType, isEmu
 func (ac *AzureCopy) CopyBlobByURL(sourceURL string, destURL string) error {
 
 	var err error
-
 	if misc.GetLastChar(sourceURL) == "/" {
 		// copying a directory/vdir worth of stuff....
 		err = ac.CopyContainerByURL(sourceURL, destURL)
@@ -103,8 +138,7 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string) error 
 
 	log.Printf("copy from %s to %s", sourceURL, destURL)
 
-	sourceHandler := ac.GetHandlerForURL(sourceURL, true)
-	deepestContainer, err := sourceHandler.GetSpecificSimpleContainer(sourceURL)
+	deepestContainer, err := ac.sourceHandler.GetSpecificSimpleContainer(sourceURL)
 	if err != nil {
 		log.Fatal("CopyContainerByURL failed ", err)
 	}
@@ -112,9 +146,7 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string) error 
 	// get the blobs for the deepest vdir which is part of the URL.
 	sourceHandler.GetContainerContents(deepestContainer, true)
 
-	destHandler := ac.GetHandlerForURL(destURL, true)
-
-	deepestDestinationContainer, err := destHandler.GetSpecificSimpleContainer(destURL)
+	deepestDestinationContainer, err := ac.destHandler.GetSpecificSimpleContainer(destURL)
 	if err != nil {
 		log.Fatal("CopyContainerByURL failed ", err)
 	}
@@ -165,18 +197,30 @@ func (ac *AzureCopy) GetHandlerForURL(url string, cacheToDisk bool) handlers.Clo
 	return handler
 }
 
-// GetRootContainer get the root container (and immediate containers/blobs)
-func (ac *AzureCopy) GetRootContainer(cloudType models.CloudType) models.SimpleContainer {
+func (ac *AzureCopy) GetSourceRootContainer() models.SimpleContainer {
+	rootContainer := ac.sourceHandler.GetRootContainer();
+	return rootContainer
+}
 
-	handler := utils.GetHandler(cloudType, ac.UseEmulator, true)
-	rootContainer := handler.GetRootContainer()
+func (ac *AzureCopy) GetDestRootContainer() models.SimpleContainer {
+	rootContainer := ac.destHandler.GetRootContainer();
 	return rootContainer
 }
 
 // GetContainerContents populates the container with data.
 func (ac *AzureCopy) GetContainerContents(container *models.SimpleContainer) {
-	handler := utils.GetHandler(container.Origin, ac.UseEmulator, true)
-	handler.GetContainerContents(container, ac.UseEmulator)
+
+	// check where container came from.
+	if container.IsSource {
+		ac.sourceHandler.GetContainerContents(container)
+	} else {
+		ac.destHandler.GetContainerContents(container)
+	}
+}
+
+// GetDestContainerContents populates the container with data.
+func (ac *AzureCopy) GetDestContainerContents(container *models.SimpleContainer) {
+	ac.destHandler.GetContainerContents(container, ac.UseEmulator)
 }
 
 // ReadBlob reads a blob and keeps it in memory OR caches to disk.

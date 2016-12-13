@@ -26,20 +26,19 @@ type AzureHandler struct {
 }
 
 // NewAzureHandler factory to create new one. Evil?
-func NewAzureHandler(useEmulator bool, cacheToDisk bool) (*AzureHandler, error) {
+func NewAzureHandler(accountName string, accountKey string, cacheToDisk bool) (*AzureHandler, error) {
 	ah := new(AzureHandler)
 
-	ah.useEmulator = useEmulator
 	ah.cacheToDisk = cacheToDisk
 	ah.cacheLocation = "c:/temp/cache/" // NFI... just making something up for now
 
 	var err error
 	var client storage.Client
 
-	if useEmulator {
+	if accountName == "" && accountKey == "" {
 		client, err = storage.NewEmulatorClient()
 	} else {
-		client, err = storage.NewBasicClient("", "")
+		client, err = storage.NewBasicClient(accountName, accountKey)
 	}
 
 	if err != nil {

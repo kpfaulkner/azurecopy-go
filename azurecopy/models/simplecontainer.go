@@ -20,6 +20,9 @@ type SimpleContainer struct {
 	URL    string
 	Origin CloudType
 
+	// indicates if this container was read from the source or destination.
+	IsSource bool
+
 	// parent.
 	// if nil parent then its the root.
 	ParentContainer *SimpleContainer

@@ -27,6 +27,9 @@ type SimpleBlob struct {
 
 	Origin CloudType
 
+	// indicates if this container was read from the source or destination.
+	IsSource bool
+
 	// parent.
 	ParentContainer *SimpleContainer
 }

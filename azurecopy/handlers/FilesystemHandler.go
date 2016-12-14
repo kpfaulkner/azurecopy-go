@@ -13,12 +13,16 @@ type FilesystemHandler struct {
 
 	// root directory we're dealing with.
 	rootContainerPath string
+
+	// is this source or dest handler?
+	IsSource bool
 }
 
 // NewFilesystemHandler factory to create new one. Evil?
-func NewFilesystemHandler(rootContainerPath string) (*FilesystemHandler, error) {
+func NewFilesystemHandler(rootContainerPath string, isSource bool) (*FilesystemHandler, error) {
 	fh := new(FilesystemHandler)
 	fh.rootContainerPath = rootContainerPath
+	fh.IsSource = isSource
 
 	return fh, nil
 }
@@ -210,7 +214,7 @@ func (fh *FilesystemHandler) generateFullPath(container *models.SimpleContainer)
 
 // GetContainerContents populates the container (directory) with the next level contents
 // currently wont do recursive.
-func (fh *FilesystemHandler) GetContainerContents(container *models.SimpleContainer, useEmulator bool) {
+func (fh *FilesystemHandler) GetContainerContents(container *models.SimpleContainer) {
 
 	log.Printf("filesystem container %s", container.Name)
 	fullPath := fh.generateFullPath(container)

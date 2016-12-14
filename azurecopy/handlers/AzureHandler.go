@@ -21,16 +21,17 @@ type AzureHandler struct {
 	cacheToDisk   bool
 	cacheLocation string
 
-	// using the azure storage emulator
-	useEmulator bool
+	// is this handler for the source or dest?
+	IsSource bool
 }
 
 // NewAzureHandler factory to create new one. Evil?
-func NewAzureHandler(accountName string, accountKey string, cacheToDisk bool) (*AzureHandler, error) {
+func NewAzureHandler(accountName string, accountKey string, isSource bool, cacheToDisk bool) (*AzureHandler, error) {
 	ah := new(AzureHandler)
 
 	ah.cacheToDisk = cacheToDisk
 	ah.cacheLocation = "c:/temp/cache/" // NFI... just making something up for now
+	ah.IsSource = isSource
 
 	var err error
 	var client storage.Client
@@ -452,7 +453,7 @@ func (ah *AzureHandler) GetContainer(containerName string) models.SimpleContaine
 //
 // For Azure only the children of the root node can be a real azure container. Everything else
 // is a blob or a blob pretending to have vdirs.
-func (ah *AzureHandler) GetContainerContents(container *models.SimpleContainer, useEmulator bool) {
+func (ah *AzureHandler) GetContainerContents(container *models.SimpleContainer) {
 
 	azureContainer, blobPrefix := azurehelper.GetContainerAndBlobPrefix(container)
 

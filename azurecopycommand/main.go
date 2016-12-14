@@ -66,16 +66,31 @@ func messingABout() {
 }
 */
 
-func printContainer(container *models.SimpleContainer) {
-	log.Printf("container %s", container.Name)
-	for _, c := range container.ContainerSlice {
-		log.Printf("container: %s", c.Name)
-		printContainer(c)
+func generateSpace(c int) string {
+	s := ""
+	for i := 0; i < c; i++ {
+		s = s + " "
 	}
 
+	return s
+}
+
+func printContainer(container *models.SimpleContainer, depth int) {
+	s := generateSpace(depth)
+
+	log.Printf("%scontainer: %s", s, container.Name)
+
+	depth = depth + 2
+	s = generateSpace(depth)
+
 	for _, b := range container.BlobSlice {
-		log.Printf("blob: %s", b.Name)
+		log.Printf("%sblob: %s", s, b.Name)
 	}
+
+	for _, c := range container.ContainerSlice {
+		printContainer(c, depth)
+	}
+
 }
 
 // "so it begins"
@@ -92,12 +107,12 @@ func main() {
 
 	config := misc.NewCloudConfig()
 
-	config.Credentials[misc.AzureSourceAccountName] = "kenfau"
-	config.Credentials[misc.AzureSourceAccountKey] = "lFXm0+/xwZK3Cg8Bd/lCXnH5KwgRYFN3VPpxtPyxFXjG6csS5CAh1peudp5h5nh15PQwA3vPwsOjkR/54d6X1w=="
+	config.Credentials[misc.AzureSourceAccountName] = ""
+	config.Credentials[misc.AzureSourceAccountKey] = ""
 
 	ac := azurecopy.NewAzureCopy(source, dest, *config)
 	container, err := ac.ListContainer(source)
-	printContainer(container)
+	printContainer(container, 0)
 
 	if err != nil {
 		log.Fatal(err)
@@ -105,7 +120,5 @@ func main() {
 
 	// http://127.0.0.1:10000/devaccount/devaccount/temp/
 	//err := ac.CopyBlobByURL(source, dest)
-
-	log.Println(err)
 
 }

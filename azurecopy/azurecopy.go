@@ -33,6 +33,7 @@ type AzureCopy struct {
 // want to know source/dest up front.
 func NewAzureCopy(sourceURL string, destURL string, config misc.CloudConfig) *AzureCopy {
 	ac := AzureCopy{}
+	ac.config = config
 	ac.destURL = destURL
 	ac.sourceURL = sourceURL
 
@@ -41,8 +42,6 @@ func NewAzureCopy(sourceURL string, destURL string, config misc.CloudConfig) *Az
 
 	ac.sourceHandler = ac.GetHandlerForURL(ac.sourceURL, true, true)
 	ac.destHandler = ac.GetHandlerForURL(ac.destURL, false, true)
-
-	ac.config = config
 
 	return &ac
 }
@@ -66,12 +65,27 @@ func (ac *AzureCopy) getCloudType(url string) (cloudType models.CloudType, isEmu
 
 	// S3
 	// need to think about S3 compatible devices. TODO(kpfaulkner)
-	match, _ = regexp.MatchString("amazons3.com", lowerURL)
+	match, _ = regexp.MatchString("s3.amazonaws.com", lowerURL)
 	if match {
 		return models.S3, false
 	}
 
 	return models.Filesystem, false
+}
+
+// ListContainer lists containers/blobs in URL
+func (ac *AzureCopy) ListContainer(sourceURL string) (*models.SimpleContainer, error) {
+	log.Printf("Listing contents of %s", sourceURL)
+
+	container, err := ac.sourceHandler.GetSpecificSimpleContainer(sourceURL)
+	if err != nil {
+		log.Fatal("ListContainer failed ", err)
+	}
+
+	// get the blobs for the deepest vdir which is part of the URL.
+	ac.sourceHandler.GetContainerContents(container)
+
+	return container, nil
 }
 
 // CopyBlobByURL copy a blob from one URL to another.

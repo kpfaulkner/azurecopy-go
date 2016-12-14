@@ -5,7 +5,6 @@ import (
 	"azurecopy/azurecopy/utils/misc"
 	"fmt"
 	"log"
-	"os"
 )
 
 /*
@@ -70,15 +69,21 @@ func messingABout() {
 func main() {
 
 	// need to figure out how to read/parse args properly.
-	source := os.Args[1]
-	dest := os.Args[2]
+	//source := os.Args[1]
+	//dest := os.Args[2]
+
+	source := "https://kenfau.blob.core.windows.net/temp/"
+	dest := ""
 
 	fmt.Printf("Copying %s to %s", source, dest)
 
 	config := misc.NewCloudConfig()
-	ac := azurecopy.NewAzureCopy(source, dest, *config)
 
-	err := ac.CopyBlobByURL("http://127.0.0.1:10000/devaccount/devaccount/temp/", "c:/temp/temp/")
+	ac := azurecopy.NewAzureCopy(source, dest, *config)
+	ac.ListContainer(source)
+
+	// http://127.0.0.1:10000/devaccount/devaccount/temp/
+	err := ac.CopyBlobByURL(source, dest)
 
 	log.Println(err)
 

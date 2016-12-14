@@ -113,7 +113,9 @@ func (ah *AzureHandler) generateSubContainers(azureContainer *models.SimpleConta
 	doneFirst := false
 
 	// strip off last /
-	blobPrefix = blobPrefix[:len(blobPrefix)-1]
+	if len(blobPrefix) > 0 {
+		blobPrefix = blobPrefix[:len(blobPrefix)-1]
+	}
 
 	sp := strings.Split(blobPrefix, "/")
 	for _, segment := range sp {
@@ -158,21 +160,17 @@ func (ah *AzureHandler) GetSpecificSimpleBlob(URL string) (*models.SimpleBlob, e
 }
 
 // validateURL returns accountName, container Name, blob Name and error
+// passes real URL such as https://myacct.blob.core.windows.net/mycontainer/blobPrefix
 func (ah *AzureHandler) validateURL(URL string) (string, string, string, error) {
-
-	azurePrefix := "azure://"
 
 	lowerURL := strings.ToLower(URL)
 
-	if lowerURL[0:len(azurePrefix)] != azurePrefix {
-		return "", "", "", errors.New("Invalid Azure prefix")
-	}
-
 	// trim azure://
-	lowerURL = lowerURL[len(azurePrefix):]
+	lowerURL = lowerURL[len("https://"):]
 	sp := strings.Split(lowerURL, "/")
 
-	accountName := sp[0]
+	sp2 := strings.Split(sp[0], ".")
+	accountName := sp2[0]
 	containerName := sp[1]
 	blobName := strings.Join(sp[2:], "/")
 

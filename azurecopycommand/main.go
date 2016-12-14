@@ -2,10 +2,13 @@ package main
 
 import (
 	"azurecopy/azurecopy"
-	"azurecopy/azurecopy/models"
+	"azurecopy/azurecopy/utils/misc"
+	"fmt"
 	"log"
+	"os"
 )
 
+/*
 func FSToAzure() {
 	ac := azurecopy.NewAzureCopy(true)
 
@@ -61,17 +64,19 @@ func messingABout() {
 	}
 
 }
+*/
 
 // "so it begins"
 func main() {
 
 	// need to figure out how to read/parse args properly.
-	/*	source := os.Args[1]
-		dest := os.Args[2]
+	source := os.Args[1]
+	dest := os.Args[2]
 
-		fmt.Printf("Copying %s to %s", source, dest)
-	*/
-	ac := azurecopy.NewAzureCopy(true)
+	fmt.Printf("Copying %s to %s", source, dest)
+
+	config := misc.NewCloudConfig()
+	ac := azurecopy.NewAzureCopy(source, dest, *config)
 
 	err := ac.CopyBlobByURL("http://127.0.0.1:10000/devaccount/devaccount/temp/", "c:/temp/temp/")
 

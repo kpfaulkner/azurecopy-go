@@ -2,6 +2,7 @@ package main
 
 import (
 	"azurecopy/azurecopy"
+	"azurecopy/azurecopy/models"
 	"azurecopy/azurecopy/utils/misc"
 	"fmt"
 	"log"
@@ -65,6 +66,18 @@ func messingABout() {
 }
 */
 
+func printContainer(container *models.SimpleContainer) {
+	log.Printf("container %s", container.Name)
+	for _, c := range container.ContainerSlice {
+		log.Printf("container: %s", c.Name)
+		printContainer(c)
+	}
+
+	for _, b := range container.BlobSlice {
+		log.Printf("blob: %s", b.Name)
+	}
+}
+
 // "so it begins"
 func main() {
 
@@ -79,11 +92,19 @@ func main() {
 
 	config := misc.NewCloudConfig()
 
+	config.Credentials[misc.AzureSourceAccountName] = "kenfau"
+	config.Credentials[misc.AzureSourceAccountKey] = "lFXm0+/xwZK3Cg8Bd/lCXnH5KwgRYFN3VPpxtPyxFXjG6csS5CAh1peudp5h5nh15PQwA3vPwsOjkR/54d6X1w=="
+
 	ac := azurecopy.NewAzureCopy(source, dest, *config)
-	ac.ListContainer(source)
+	container, err := ac.ListContainer(source)
+	printContainer(container)
+
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// http://127.0.0.1:10000/devaccount/devaccount/temp/
-	err := ac.CopyBlobByURL(source, dest)
+	//err := ac.CopyBlobByURL(source, dest)
 
 	log.Println(err)
 

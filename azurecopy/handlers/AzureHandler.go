@@ -56,6 +56,8 @@ func NewAzureHandler(accountName string, accountKey string, isSource bool, cache
 // that has the containerSlice populated with the real Azure containers.
 func (ah *AzureHandler) GetRootContainer() models.SimpleContainer {
 
+	log.Printf("GetRootContainer")
+
 	params := storage.ListContainersParameters{}
 	containerResponse, err := ah.blobStorageClient.ListContainers(params)
 
@@ -82,6 +84,7 @@ func (ah *AzureHandler) GetRootContainer() models.SimpleContainer {
 // returned is vdir.
 func (ah *AzureHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleContainer, error) {
 
+	log.Printf("GetSpecificSimpleContainer %s", URL)
 	lastChar := URL[len(URL)-1:]
 	// MUST be a better way to get the last character.
 	if lastChar != "/" {
@@ -100,13 +103,19 @@ func (ah *AzureHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleCo
 
 	subContainer, lastContainer := ah.generateSubContainers(container, blobPrefix)
 
-	container.ContainerSlice = append(container.ContainerSlice, subContainer)
+	if subContainer != nil {
+		container.ContainerSlice = append(container.ContainerSlice, subContainer)
+	}
+
+	log.Printf("GetSpecificSimpleContainer returning %s", lastContainer.Name)
 
 	// return the "deepest" container.
 	return lastContainer, nil
 }
 
 func (ah *AzureHandler) generateSubContainers(azureContainer *models.SimpleContainer, blobPrefix string) (*models.SimpleContainer, *models.SimpleContainer) {
+
+	log.Printf("generateSubContainers %s : prefix %s", azureContainer.Name, blobPrefix)
 
 	var containerToReturn *models.SimpleContainer
 	var lastContainer *models.SimpleContainer
@@ -115,28 +124,35 @@ func (ah *AzureHandler) generateSubContainers(azureContainer *models.SimpleConta
 	// strip off last /
 	if len(blobPrefix) > 0 {
 		blobPrefix = blobPrefix[:len(blobPrefix)-1]
-	}
+		sp := strings.Split(blobPrefix, "/")
 
-	sp := strings.Split(blobPrefix, "/")
-	for _, segment := range sp {
-		container := models.NewSimpleContainer()
-		container.Name = segment
-		if !doneFirst {
-			container.ParentContainer = azureContainer
-			containerToReturn = container
-			doneFirst = true
-		} else {
-			container.ParentContainer = lastContainer
-			lastContainer.ContainerSlice = append(lastContainer.ContainerSlice, container)
+		for _, segment := range sp {
+			container := models.NewSimpleContainer()
+			container.Name = segment
+			if !doneFirst {
+				container.ParentContainer = azureContainer
+				containerToReturn = container
+				doneFirst = true
+			} else {
+				container.ParentContainer = lastContainer
+				lastContainer.ContainerSlice = append(lastContainer.ContainerSlice, container)
+			}
+
+			lastContainer = container
 		}
+	} else {
 
-		lastContainer = container
+		// just return existing container (lastContainer) and no subcontainer (containerToReturn)
+		containerToReturn = nil
+		lastContainer = azureContainer
 	}
 
 	return containerToReturn, lastContainer
 }
 
 func (ah *AzureHandler) getAzureContainer(containerName string) (*models.SimpleContainer, error) {
+
+	log.Printf("getAzureContainer %s", containerName)
 	rootContainer := ah.GetRootContainer()
 
 	for _, container := range rootContainer.ContainerSlice {

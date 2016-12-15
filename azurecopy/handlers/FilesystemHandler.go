@@ -4,6 +4,7 @@ import (
 	"azurecopy/azurecopy/models"
 	"log"
 	"os"
+	"path"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
 )
@@ -113,7 +114,19 @@ func (fh *FilesystemHandler) generateAzureContainerName(blob *models.SimpleBlob)
 func (fh *FilesystemHandler) WriteBlob(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
 	log.Println("FilesystemHandler::WriteBlob ", sourceBlob.Name)
 
-	fullPath := fh.generateFullPath(destContainer) + "/" + sourceBlob.Name
+	blobName := sourceBlob.Name
+	if blobName[0] == '/' {
+		blobName = blobName[1:]
+	}
+
+	fullPath := fh.generateFullPath(destContainer) + blobName
+
+	// make sure subdirs are created.
+	err := fh.createSubDirectories(fullPath)
+	if err != nil {
+		log.Fatal(err)
+		return err
+	}
 
 	if !sourceBlob.BlobInMemory {
 		err := fh.copyFile(sourceBlob.DataCachedAtPath, fullPath)
@@ -140,6 +153,13 @@ func (fh *FilesystemHandler) WriteBlob(destContainer *models.SimpleContainer, so
 			totalBytesWritten += bytesWritten
 		}
 	}
+
+	return nil
+}
+
+func (fh *FilesystemHandler) createSubDirectories(fullPath string) error {
+	var dirPath = path.Dir(fullPath)
+	os.MkdirAll(dirPath, 0777)
 
 	return nil
 }

@@ -170,7 +170,7 @@ func (ac *AzureCopy) copyAllBlobsInContainer(sourceContainer *models.SimpleConta
 
 	// call for each sub container.
 	for _, container := range sourceContainer.ContainerSlice {
-		err := ac.copyAllBlobsInContainer(container, destContainer, prefix+"/"+sourceContainer.Name)
+		err := ac.copyAllBlobsInContainer(container, destContainer, prefix+"/"+container.Name)
 		if err != nil {
 			log.Fatal(err)
 		}

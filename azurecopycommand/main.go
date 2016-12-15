@@ -101,24 +101,24 @@ func main() {
 	//dest := os.Args[2]
 
 	source := "https://kenfau.blob.core.windows.net/temp/"
-	dest := ""
+	dest := "c:/temp/data/"
 
 	fmt.Printf("Copying %s to %s", source, dest)
 
 	config := misc.NewCloudConfig()
 
-	config.Credentials[misc.AzureSourceAccountName] = ""
-	config.Credentials[misc.AzureSourceAccountKey] = ""
-
 	ac := azurecopy.NewAzureCopy(source, dest, *config)
-	container, err := ac.ListContainer(source)
-	printContainer(container, 0)
+	//container, err := ac.ListContainer(source)
+	//printContainer(container, 0)
 
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+
+	// http://127.0.0.1:10000/devaccount/devaccount/temp/
+	err := ac.CopyBlobByURL(source, dest)
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	// http://127.0.0.1:10000/devaccount/devaccount/temp/
-	//err := ac.CopyBlobByURL(source, dest)
 
 }

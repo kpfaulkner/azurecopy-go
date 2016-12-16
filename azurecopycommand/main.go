@@ -4,8 +4,9 @@ import (
 	"azurecopy/azurecopy"
 	"azurecopy/azurecopy/models"
 	"azurecopy/azurecopy/utils/misc"
-	"fmt"
-	"log"
+	"os"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 /*
@@ -100,10 +101,14 @@ func main() {
 	//source := os.Args[1]
 	//dest := os.Args[2]
 
+	// everything to stderr
+	log.SetOutput(os.Stderr)
+	log.SetLevel(log.InfoLevel)
+
 	dest := "https://kenfau.blob.core.windows.net/temp/"
 	source := "c:/temp/data/"
 
-	fmt.Printf("Copying %s to %s", source, dest)
+	log.Infof("Copying %s to %s", source, dest)
 
 	config := misc.NewCloudConfig()
 

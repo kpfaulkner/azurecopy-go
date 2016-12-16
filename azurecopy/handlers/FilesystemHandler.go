@@ -2,11 +2,12 @@ package handlers
 
 import (
 	"azurecopy/azurecopy/models"
-	"log"
+
 	"os"
 	"path"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
+	log "github.com/Sirupsen/logrus"
 )
 
 // FilesystemHandler basic data structure for FS handling.
@@ -32,7 +33,7 @@ func NewFilesystemHandler(rootContainerPath string, isSource bool) (*FilesystemH
 // that has the containerSlice populated with the real Azure containers.
 func (fh *FilesystemHandler) GetRootContainer() models.SimpleContainer {
 
-	log.Printf("FS:GetRootContainer %s", fh.rootContainerPath)
+	log.Debugf("FS:GetRootContainer %s", fh.rootContainerPath)
 
 	dir, err := os.OpenFile(fh.rootContainerPath, os.O_RDONLY, 0)
 	if err != nil {
@@ -112,7 +113,7 @@ func (fh *FilesystemHandler) generateAzureContainerName(blob *models.SimpleBlob)
 // and if the blobName is "myblob" then the REAL underlying Azure structure would be container == "myrealcontainer"
 // and the blob name is vdir/vdir2/myblob
 func (fh *FilesystemHandler) WriteBlob(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
-	log.Println("FilesystemHandler::WriteBlob ", sourceBlob.Name)
+	log.Debugf("FilesystemHandler::WriteBlob ", sourceBlob.Name)
 
 	blobName := sourceBlob.Name
 	if blobName[0] == '/' {
@@ -239,7 +240,7 @@ func (fh *FilesystemHandler) generateFullPath(container *models.SimpleContainer)
 // currently wont do recursive.
 func (fh *FilesystemHandler) GetContainerContents(container *models.SimpleContainer) {
 
-	log.Printf("filesystem container %s", container.Name)
+	log.Debugf("filesystem container %s", container.Name)
 	fullPath := fh.generateFullPath(container)
 	dir, err := os.OpenFile(fullPath, os.O_RDONLY, 0)
 	if err != nil {

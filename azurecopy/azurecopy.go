@@ -5,9 +5,10 @@ import (
 	"azurecopy/azurecopy/models"
 	"azurecopy/azurecopy/utils"
 	"azurecopy/azurecopy/utils/misc"
-	"log"
 	"regexp"
 	"strings"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 // AzureCopy main client class.
@@ -75,7 +76,7 @@ func (ac *AzureCopy) getCloudType(url string) (cloudType models.CloudType, isEmu
 
 // ListContainer lists containers/blobs in URL
 func (ac *AzureCopy) ListContainer(sourceURL string) (*models.SimpleContainer, error) {
-	log.Printf("Listing contents of %s", sourceURL)
+	log.Debugf("Listing contents of %s", sourceURL)
 
 	container, err := ac.sourceHandler.GetSpecificSimpleContainer(sourceURL)
 	if err != nil {
@@ -125,7 +126,7 @@ func (ac *AzureCopy) CopySingleBlobByURL(sourceURL string, destURL string) error
 // CopyContainerByURL copies blobs/containers from a URL to a destination URL.
 func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string) error {
 
-	log.Printf("copy from %s to %s", sourceURL, destURL)
+	log.Infof("copy from %s to %s", sourceURL, destURL)
 
 	deepestContainer, err := ac.sourceHandler.GetSpecificSimpleContainer(sourceURL)
 	if err != nil {
@@ -142,8 +143,6 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string) error 
 
 	// recursive...  dangerous...
 	ac.copyAllBlobsInContainer(deepestContainer, deepestDestinationContainer, "")
-	// write out all the blobs.... loop through BlobSlice, ContainerSlice and all sub blobs.
-	//ac.WriteBlob(deepestDestinationContainer, blob)
 
 	return nil
 }
@@ -161,7 +160,7 @@ func (ac *AzureCopy) copyAllBlobsInContainer(sourceContainer *models.SimpleConta
 			blob.Name = prefix + "/" + blob.Name
 		}
 
-		log.Printf("Read %s and writing as %s", origName, blob.Name)
+		log.Debugf("Read %s and writing as %s", origName, blob.Name)
 
 		// modify blob name?
 		// hacky? Options? TODO(kpfaulkner)
@@ -223,7 +222,7 @@ func (ac *AzureCopy) GetDestContainerContents(container *models.SimpleContainer)
 // (or in the special case of azure copyblob flag it will do something tricky, once I get to that part)
 func (ac *AzureCopy) ReadBlob(blob *models.SimpleBlob) {
 
-	log.Println("ReadBlob " + blob.Name)
+	log.Debugf("ReadBlob %s", blob.Name)
 	err := ac.sourceHandler.PopulateBlob(blob)
 
 	if err != nil {
@@ -236,9 +235,9 @@ func (ac *AzureCopy) ReadBlob(blob *models.SimpleBlob) {
 func (ac *AzureCopy) WriteBlob(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
 
 	if destContainer == nil {
-		log.Print("dest container is nil")
+		log.Debugf("dest container is nil")
 	} else {
-		log.Printf("write dest loc %s ", destContainer.URL)
+		log.Debugf("write dest loc %s ", destContainer.URL)
 	}
 
 	if err := ac.destHandler.WriteBlob(destContainer, sourceBlob); err != nil {

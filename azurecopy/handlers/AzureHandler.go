@@ -3,8 +3,7 @@ package handlers
 import (
 	"azurecopy/azurecopy/models"
 	"azurecopy/azurecopy/utils/azurehelper"
-	"crypto/sha1"
-	"encoding/hex"
+	"encoding/base64"
 	"errors"
 	"log"
 	"os"
@@ -314,7 +313,13 @@ func (ah *AzureHandler) getContainerAndBlobNames(destContainer *models.SimpleCon
 	azureContainer, blobPrefix := azurehelper.GetContainerAndBlobPrefix(destContainer)
 	azureContainerName := azureContainer.Name
 
-	azureBlobName := blobPrefix + "/" + sourceBlob.Name
+	var azureBlobName string
+
+	if blobPrefix != "" {
+		azureBlobName = blobPrefix + "/" + sourceBlob.Name
+	} else {
+		azureBlobName = sourceBlob.Name
+	}
 
 	return azureContainerName, azureBlobName
 }
@@ -434,9 +439,11 @@ func (ah *AzureHandler) writeMemoryToBlob(containerName string, blobName string,
 	// generate hash of bytearray.
 	blockID := ""
 
-	hasher := sha1.New()
-	hasher.Write(buffer)
-	blockID = hex.EncodeToString(hasher.Sum(nil))
+	//hasher := sha1.New()
+	//hasher.Write(buffer)
+	//blockID = hex.EncodeToString(hasher.Sum(nil))
+
+	blockID = base64.StdEncoding.EncodeToString(buffer)
 
 	log.Println("Creating blockID ", blockID)
 	err := ah.blobStorageClient.PutBlock(containerName, blobName, blockID, buffer)

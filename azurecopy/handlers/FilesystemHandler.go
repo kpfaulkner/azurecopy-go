@@ -225,7 +225,10 @@ func (fh *FilesystemHandler) generateFullPath(container *models.SimpleContainer)
 	path := container.Name
 	currentContainer := container.ParentContainer
 	for currentContainer != nil {
-		path = currentContainer.Name + "/" + path
+		if currentContainer.Name != "" {
+			path = currentContainer.Name + "/" + path
+		}
+
 		currentContainer = currentContainer.ParentContainer
 	}
 
@@ -258,6 +261,8 @@ func (fh *FilesystemHandler) GetContainerContents(container *models.SimpleContai
 			sc.Origin = models.Filesystem
 			sc.ParentContainer = container
 			sc.Populated = false
+
+			fh.GetContainerContents(sc)
 			container.ContainerSlice = append(container.ContainerSlice, sc)
 
 		} else {

@@ -100,8 +100,8 @@ func main() {
 	//source := os.Args[1]
 	//dest := os.Args[2]
 
-	source := "https://kenfau.blob.core.windows.net/temp/"
-	dest := "c:/temp/data/"
+	dest := "https://kenfau.blob.core.windows.net/temp/"
+	source := "c:/temp/data/"
 
 	fmt.Printf("Copying %s to %s", source, dest)
 

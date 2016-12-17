@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 
+	"sync"
+
 	log "github.com/Sirupsen/logrus"
 )
 
@@ -149,22 +151,29 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string) error 
 // copyAllBlobsInContainer recursively copies all blobs (in sub containers) to the destination.
 func (ac *AzureCopy) copyAllBlobsInContainer(sourceContainer *models.SimpleContainer, destContainer *models.SimpleContainer, prefix string) error {
 
+	var wg sync.WaitGroup
+	wg.Add(len(sourceContainer.BlobSlice))
+
 	// copy all blobs
-	// nothing concurrent YET
 	for _, blob := range sourceContainer.BlobSlice {
-		ac.ReadBlob(blob)
-		origName := blob.Name
 
-		if prefix != "" {
-			blob.Name = prefix + "/" + blob.Name
-		}
+		go func() {
+			defer wg.Done()
+			ac.ReadBlob(blob)
+			origName := blob.Name
 
-		log.Debugf("Read %s and writing as %s", origName, blob.Name)
+			if prefix != "" {
+				blob.Name = prefix + "/" + blob.Name
+			}
 
-		// modify blob name?
-		// hacky? Options? TODO(kpfaulkner)
-		ac.WriteBlob(destContainer, blob)
+			log.Debugf("Read %s and writing as %s", origName, blob.Name)
+
+			// modify blob name?
+			// hacky? Options? TODO(kpfaulkner)
+			ac.WriteBlob(destContainer, blob)
+		}()
 	}
+	wg.Wait()
 
 	// call for each sub container.
 	for _, container := range sourceContainer.ContainerSlice {

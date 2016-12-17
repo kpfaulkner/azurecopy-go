@@ -32,11 +32,13 @@ type AzureCopy struct {
 
 // NewAzureCopy factory time!
 // want to know source/dest up front.
-func NewAzureCopy(sourceURL string, destURL string, config misc.CloudConfig) *AzureCopy {
+func NewAzureCopy(config misc.CloudConfig) *AzureCopy {
 	ac := AzureCopy{}
 	ac.config = config
-	ac.destURL = destURL
-	ac.sourceURL = sourceURL
+
+	// technically duped from config, but just easier to reference.
+	ac.destURL = config.Configuration[misc.Dest]
+	ac.sourceURL = config.Configuration[misc.Source]
 
 	ac.sourceCloudType, _ = ac.getCloudType(ac.sourceURL)
 	ac.destCloudType, _ = ac.getCloudType(ac.destURL)
@@ -90,17 +92,14 @@ func (ac *AzureCopy) ListContainer(sourceURL string) (*models.SimpleContainer, e
 }
 
 // CopyBlobByURL copy a blob from one URL to another.
-// Format of sourceURL and destURL are REAL URLS.
-// No dodgy made up prefix.
-// TODO(kpfaulkner) need to figure out cache and emulator params here.
-func (ac *AzureCopy) CopyBlobByURL(sourceURL string, destURL string) error {
+func (ac *AzureCopy) CopyBlobByURL() error {
 
 	var err error
-	if misc.GetLastChar(sourceURL) == "/" {
+	if misc.GetLastChar(ac.sourceURL) == "/" {
 		// copying a directory/vdir worth of stuff....
-		err = ac.CopyContainerByURL(sourceURL, destURL)
+		err = ac.CopyContainerByURL(ac.sourceURL, ac.destURL)
 	} else {
-		err = ac.CopySingleBlobByURL(sourceURL, destURL)
+		err = ac.CopySingleBlobByURL(ac.sourceURL, ac.destURL)
 	}
 
 	if err != nil {
@@ -187,6 +186,7 @@ func (ac *AzureCopy) copyAllBlobsInContainer(sourceContainer *models.SimpleConta
 
 // GetHandlerForURL returns the appropriate handler for a given cloud type.
 func (ac *AzureCopy) GetHandlerForURL(url string, isSource bool, cacheToDisk bool) handlers.CloudHandlerInterface {
+	log.Debugf("GetHandlerForURL %s", url)
 	cloudType, _ := ac.getCloudType(url)
 	handler := utils.GetHandler(cloudType, isSource, ac.config, cacheToDisk)
 	return handler

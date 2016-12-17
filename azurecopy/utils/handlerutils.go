@@ -31,16 +31,16 @@ func GetHandler(cloudType models.CloudType, isSource bool, config misc.CloudConf
 
 func getAzureCredentials(isSource bool, config misc.CloudConfig) (accountName string, accountKey string) {
 	if isSource {
-		accountName = config.Credentials[misc.AzureSourceAccountName]
-		accountKey = config.Credentials[misc.AzureSourceAccountKey]
+		accountName = config.Configuration[misc.AzureSourceAccountName]
+		accountKey = config.Configuration[misc.AzureSourceAccountKey]
 	} else {
-		accountName = config.Credentials[misc.AzureDestAccountName]
-		accountKey = config.Credentials[misc.AzureDestAccountKey]
+		accountName = config.Configuration[misc.AzureDestAccountName]
+		accountKey = config.Configuration[misc.AzureDestAccountKey]
 	}
 
 	if accountName == "" || accountKey == "" {
-		accountName = config.Credentials[misc.AzureDefaultAccountName]
-		accountKey = config.Credentials[misc.AzureDefaultAccountKey]
+		accountName = config.Configuration[misc.AzureDefaultAccountName]
+		accountKey = config.Configuration[misc.AzureDefaultAccountKey]
 	}
 
 	return accountName, accountKey

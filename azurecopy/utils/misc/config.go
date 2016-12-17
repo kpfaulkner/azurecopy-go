@@ -19,20 +19,24 @@ const (
 	S3SourceAccessSecret  = "S3SourceAccessSecret"
 	S3DestAccessID        = "S3DestAccessID"
 	S3DestAccessSecret    = "S3DestAccessSecret"
+
+	// debug
+	Debug  = "Debug"
+	Source = "Source"
+	Dest   = "Dest"
 )
 
 // CloudConfig UGLY UGLY UGLY way to store the configuration.
 // globally accessible, otherwise I'm passing it everywhere.
 type CloudConfig struct {
+	Configuration map[string]string
 
-	// credentials used for various handlers.
-	// main application will pass these in.
-	Credentials map[string]string
+	Debug bool // are we in debug mode.
 }
 
 // NewCloudConfig  Make new (and only really) configuration map
 func NewCloudConfig() *CloudConfig {
 	cc := CloudConfig{}
-	cc.Credentials = make(map[string]string)
+	cc.Configuration = make(map[string]string)
 	return &cc
 }

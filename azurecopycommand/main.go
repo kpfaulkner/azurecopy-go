@@ -4,7 +4,7 @@ import (
 	"azurecopy/azurecopy"
 	"azurecopy/azurecopy/models"
 	"azurecopy/azurecopy/utils/misc"
-	"os"
+	"flag"
 
 	log "github.com/Sirupsen/logrus"
 )
@@ -94,34 +94,63 @@ func printContainer(container *models.SimpleContainer, depth int) {
 
 }
 
+func setupConfiguration() *misc.CloudConfig {
+	config := misc.NewCloudConfig()
+
+	var source = flag.String("source", "", "Source URL")
+	var dest = flag.String("dest", "", "Destination URL")
+	var debug = flag.Bool("debug", false, "Debug output")
+
+	var azureDefaultAccountName = flag.String("AzureDefaultAccountName", "", "Default Azure Account Name")
+	var azureDefaultAccountKey = flag.String("AzureDefaultAccountKey", "", "Default Azure Account Key")
+	var azureSourceAccountName = flag.String("AzureSourceAccountName", "", "Source Azure Account Name")
+	var azureSourceAccountKey = flag.String("AzureSourceAccountKey", "", "Source Azure Account Key")
+	var azureDestAccountName = flag.String("AzureDestAccountName", "", "Destination Azure Account Name")
+	var azureDestAccountKey = flag.String("AzureDestAccountKey", "", "Destination Azure Account Key")
+
+	var s3DefaultAccessID = flag.String("S3DefaultAccessID", "", "Default S3 Access ID")
+	var s3DefaultAccessSecret = flag.String("S3DefaultAccessSecret", "", "Default S3 Access Secret")
+	var s3SourceAccessID = flag.String("S3SourceAccessID", "", "Source S3 Access ID")
+	var s3SourceAccessSecret = flag.String("S3SourceAccessSecret", "", "Source S3 Access Secret")
+	var s3DestAccessID = flag.String("S3DestAccessID", "", "Destination S3 Access ID")
+	var s3DestAccessSecret = flag.String("S3DestAccessSecret", "", "Destination S3 Access Secret")
+
+	flag.Parse()
+
+	config.Configuration[misc.Source] = *source
+	config.Configuration[misc.Dest] = *dest
+	config.Debug = *debug
+
+	config.Configuration[misc.AzureDefaultAccountName] = *azureDefaultAccountName
+	config.Configuration[misc.AzureDefaultAccountKey] = *azureDefaultAccountKey
+	config.Configuration[misc.AzureSourceAccountName] = *azureSourceAccountName
+	config.Configuration[misc.AzureSourceAccountKey] = *azureSourceAccountKey
+	config.Configuration[misc.AzureDestAccountName] = *azureDestAccountName
+	config.Configuration[misc.AzureDestAccountKey] = *azureDestAccountKey
+
+	config.Configuration[misc.S3DefaultAccessID] = *s3DefaultAccessID
+	config.Configuration[misc.S3DefaultAccessSecret] = *s3DefaultAccessSecret
+	config.Configuration[misc.S3SourceAccessID] = *s3SourceAccessID
+	config.Configuration[misc.S3SourceAccessSecret] = *s3SourceAccessSecret
+	config.Configuration[misc.S3DestAccessID] = *s3DestAccessID
+	config.Configuration[misc.S3DestAccessSecret] = *s3DestAccessSecret
+
+	return config
+}
+
 // "so it begins"
 func main() {
 
-	// need to figure out how to read/parse args properly.
-	//source := os.Args[1]
-	//dest := os.Args[2]
+	config := setupConfiguration()
 
-	// everything to stderr
-	log.SetOutput(os.Stderr)
-	log.SetLevel(log.InfoLevel)
+	if !config.Debug {
+		log.SetLevel(log.InfoLevel)
+	} else {
+		log.SetLevel(log.DebugLevel)
+	}
 
-	dest := "https://kenfau.blob.core.windows.net/temp/"
-	source := "c:/temp/data/"
-
-	log.Infof("Copying %s to %s", source, dest)
-
-	config := misc.NewCloudConfig()
-
-	ac := azurecopy.NewAzureCopy(source, dest, *config)
-	//container, err := ac.ListContainer(source)
-	//printContainer(container, 0)
-
-	//if err != nil {
-	//	log.Fatal(err)
-	//}
-
-	// http://127.0.0.1:10000/devaccount/devaccount/temp/
-	err := ac.CopyBlobByURL(source, dest)
+	ac := azurecopy.NewAzureCopy(*config)
+	err := ac.CopyBlobByURL()
 	if err != nil {
 		log.Fatal(err)
 	}

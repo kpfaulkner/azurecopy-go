@@ -9,6 +9,13 @@ import (
 	log "github.com/Sirupsen/logrus"
 )
 
+// Commands to execute
+const (
+	CommandCopy = iota
+	CommandList
+	CommandUnknown
+)
+
 /*
 func FSToAzure() {
 	ac := azurecopy.NewAzureCopy(true)
@@ -94,12 +101,38 @@ func printContainer(container *models.SimpleContainer, depth int) {
 
 }
 
+// getCommand. Naive way to determine what the actual user wants to do. Copy, list etc etc.
+// rework when it gets more complex.
+func getCommand(copyCommand bool, listCommand bool) int {
+
+	if !copyCommand && !listCommand {
+		log.Fatal("No command given")
+	}
+
+	if copyCommand == true && listCommand == true {
+		log.Fatal("Multiple commands given")
+	}
+
+	if copyCommand {
+		return CommandCopy
+	}
+
+	if listCommand {
+		return CommandList
+	}
+
+	log.Fatal("unsure of command to use")
+	return CommandUnknown
+}
+
 func setupConfiguration() *misc.CloudConfig {
 	config := misc.NewCloudConfig()
 
 	var source = flag.String("source", "", "Source URL")
 	var dest = flag.String("dest", "", "Destination URL")
 	var debug = flag.Bool("debug", false, "Debug output")
+	var copyCommand = flag.Bool("copy", false, "Copy from source to destination")
+	var listCommand = flag.Bool("list", false, "List contents from source")
 
 	var azureDefaultAccountName = flag.String("AzureDefaultAccountName", "", "Default Azure Account Name")
 	var azureDefaultAccountKey = flag.String("AzureDefaultAccountKey", "", "Default Azure Account Key")
@@ -116,6 +149,8 @@ func setupConfiguration() *misc.CloudConfig {
 	var s3DestAccessSecret = flag.String("S3DestAccessSecret", "", "Destination S3 Access Secret")
 
 	flag.Parse()
+
+	config.Command = getCommand(*copyCommand, *listCommand)
 
 	config.Configuration[misc.Source] = *source
 	config.Configuration[misc.Dest] = *dest
@@ -150,9 +185,26 @@ func main() {
 	}
 
 	ac := azurecopy.NewAzureCopy(*config)
-	err := ac.CopyBlobByURL()
-	if err != nil {
-		log.Fatal(err)
+
+	switch config.Command {
+	case CommandCopy:
+		err := ac.CopyBlobByURL()
+		if err != nil {
+			log.Fatal(err)
+		}
+		break
+
+	case CommandList:
+		container, err := ac.ListContainer()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		container.DisplayContainer("")
+		break
+
+	case CommandUnknown:
+		log.Fatal("Unsure of command to execute")
 	}
 
 }

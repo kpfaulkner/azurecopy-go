@@ -32,6 +32,8 @@ type CloudConfig struct {
 	Configuration map[string]string
 
 	Debug bool // are we in debug mode.
+
+	Command int // command we're executing
 }
 
 // NewCloudConfig  Make new (and only really) configuration map

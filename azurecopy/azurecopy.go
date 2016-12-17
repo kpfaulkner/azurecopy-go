@@ -77,10 +77,10 @@ func (ac *AzureCopy) getCloudType(url string) (cloudType models.CloudType, isEmu
 }
 
 // ListContainer lists containers/blobs in URL
-func (ac *AzureCopy) ListContainer(sourceURL string) (*models.SimpleContainer, error) {
-	log.Debugf("Listing contents of %s", sourceURL)
+func (ac *AzureCopy) ListContainer() (*models.SimpleContainer, error) {
+	log.Debugf("Listing contents of %s", ac.sourceURL)
 
-	container, err := ac.sourceHandler.GetSpecificSimpleContainer(sourceURL)
+	container, err := ac.sourceHandler.GetSpecificSimpleContainer(ac.sourceURL)
 	if err != nil {
 		log.Fatal("ListContainer failed ", err)
 	}

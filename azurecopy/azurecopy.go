@@ -94,14 +94,14 @@ func (ac *AzureCopy) ListContainer() (*models.SimpleContainer, error) {
 }
 
 // CopyBlobByURL copy a blob from one URL to another.
-func (ac *AzureCopy) CopyBlobByURL() error {
+func (ac *AzureCopy) CopyBlobByURL(replaceExisting bool) error {
 
 	var err error
 	if misc.GetLastChar(ac.sourceURL) == "/" {
 		// copying a directory/vdir worth of stuff....
-		err = ac.CopyContainerByURL(ac.sourceURL, ac.destURL)
+		err = ac.CopyContainerByURL(ac.sourceURL, ac.destURL, replaceExisting)
 	} else {
-		err = ac.CopySingleBlobByURL(ac.sourceURL, ac.destURL)
+		err = ac.CopySingleBlobByURL(ac.sourceURL, ac.destURL, replaceExisting)
 	}
 
 	if err != nil {
@@ -111,7 +111,7 @@ func (ac *AzureCopy) CopyBlobByURL() error {
 }
 
 // CopySingleBlobByURL copies a single blob referenced by URL to a destination URL
-func (ac *AzureCopy) CopySingleBlobByURL(sourceURL string, destURL string) error {
+func (ac *AzureCopy) CopySingleBlobByURL(sourceURL string, destURL string, replaceExisting bool) error {
 
 	deepestContainer, err := ac.sourceHandler.GetSpecificSimpleContainer(sourceURL)
 	if err != nil {
@@ -125,7 +125,7 @@ func (ac *AzureCopy) CopySingleBlobByURL(sourceURL string, destURL string) error
 }
 
 // CopyContainerByURL copies blobs/containers from a URL to a destination URL.
-func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string) error {
+func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replaceExisting bool) error {
 
 	log.Infof("copy from %s to %s", sourceURL, destURL)
 
@@ -143,13 +143,13 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string) error 
 	}
 
 	// recursive...  dangerous...
-	ac.copyAllBlobsInContainer(deepestContainer, deepestDestinationContainer, "")
+	ac.copyAllBlobsInContainer(deepestContainer, deepestDestinationContainer, "", replaceExisting)
 
 	return nil
 }
 
 // copyAllBlobsInContainer recursively copies all blobs (in sub containers) to the destination.
-func (ac *AzureCopy) copyAllBlobsInContainer(sourceContainer *models.SimpleContainer, destContainer *models.SimpleContainer, prefix string) error {
+func (ac *AzureCopy) copyAllBlobsInContainer(sourceContainer *models.SimpleContainer, destContainer *models.SimpleContainer, prefix string, replaceExisting bool) error {
 
 	var wg sync.WaitGroup
 	wg.Add(len(sourceContainer.BlobSlice))
@@ -159,6 +159,20 @@ func (ac *AzureCopy) copyAllBlobsInContainer(sourceContainer *models.SimpleConta
 
 		go func() {
 			defer wg.Done()
+
+			// check if blob exists if we're not replacing
+			if !replaceExisting {
+				exists, err := ac.doesDestinationBlobExist(destContainer, blob)
+				if err != nil {
+					log.Fatalf("Error", err)
+				}
+
+				// exists and we dont want to replace
+				if exists {
+					return
+				}
+			}
+
 			ac.ReadBlob(blob)
 			origName := blob.Name
 
@@ -184,7 +198,7 @@ func (ac *AzureCopy) copyAllBlobsInContainer(sourceContainer *models.SimpleConta
 			newPrefix = container.Name
 		}
 
-		err := ac.copyAllBlobsInContainer(container, destContainer, newPrefix)
+		err := ac.copyAllBlobsInContainer(container, destContainer, newPrefix, replaceExisting)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -238,6 +252,21 @@ func (ac *AzureCopy) ReadBlob(blob *models.SimpleBlob) {
 		log.Fatal(err)
 
 	}
+}
+
+// doesDestinationBlobExist checks if the destination blob exists
+func (ac *AzureCopy) doesDestinationBlobExist(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) (bool, error) {
+
+	if destContainer == nil {
+		log.Debugf("dest container is nil")
+	} else {
+		log.Debugf("write dest loc %s ", destContainer.URL)
+	}
+
+	if err := ac.destHandler.WriteBlob(destContainer, sourceBlob); err != nil {
+		log.Fatal("WriteBlob kaboom ", err)
+	}
+	return false, nil
 }
 
 // WriteBlob writes a source blob (can be from anywhere) to a destination container (can and probably will be a different cloud platform)

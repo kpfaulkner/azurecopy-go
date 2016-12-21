@@ -291,6 +291,20 @@ func (fh *FilesystemHandler) populateSimpleContainer(blobListResponse storage.Bl
 
 }
 
+// BlobExists checks if blob already exists
+func (fh *FilesystemHandler) BlobExists(container models.SimpleContainer, blobName string) (bool, error) {
+
+	if blobName[0] == '/' {
+		blobName = blobName[1:]
+	}
+
+	fullPath := fh.generateFullPath(&container) + blobName
+
+	log.Printf("FH %s", fullPath)
+
+	return false, nil
+}
+
 // getSubContainer gets an existing subcontainer with parent of container and name of segment.
 // otherwise it creates it, adds it to the parent container and returns the new one.
 func (fh *FilesystemHandler) getSubContainer(container *models.SimpleContainer, segment string) *models.SimpleContainer {

@@ -21,9 +21,10 @@ const (
 	S3DestAccessSecret    = "S3DestAccessSecret"
 
 	// debug
-	Debug  = "Debug"
-	Source = "Source"
-	Dest   = "Dest"
+	Debug   = "Debug"
+	Source  = "Source"
+	Dest    = "Dest"
+	Replace = "Replace"
 )
 
 // CloudConfig UGLY UGLY UGLY way to store the configuration.
@@ -34,6 +35,8 @@ type CloudConfig struct {
 	Debug bool // are we in debug mode.
 
 	Command int // command we're executing
+
+	Replace bool // will replace at destination
 }
 
 // NewCloudConfig  Make new (and only really) configuration map

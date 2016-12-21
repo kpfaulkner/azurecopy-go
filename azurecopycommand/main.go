@@ -133,6 +133,7 @@ func setupConfiguration() *misc.CloudConfig {
 	var debug = flag.Bool("debug", false, "Debug output")
 	var copyCommand = flag.Bool("copy", false, "Copy from source to destination")
 	var listCommand = flag.Bool("list", false, "List contents from source")
+	var replace = flag.Bool("replace", true, "Replace blob if already exists")
 
 	var azureDefaultAccountName = flag.String("AzureDefaultAccountName", "", "Default Azure Account Name")
 	var azureDefaultAccountKey = flag.String("AzureDefaultAccountKey", "", "Default Azure Account Key")
@@ -155,7 +156,7 @@ func setupConfiguration() *misc.CloudConfig {
 	config.Configuration[misc.Source] = *source
 	config.Configuration[misc.Dest] = *dest
 	config.Debug = *debug
-
+	config.Replace = *replace
 	config.Configuration[misc.AzureDefaultAccountName] = *azureDefaultAccountName
 	config.Configuration[misc.AzureDefaultAccountKey] = *azureDefaultAccountKey
 	config.Configuration[misc.AzureSourceAccountName] = *azureSourceAccountName
@@ -188,7 +189,7 @@ func main() {
 
 	switch config.Command {
 	case CommandCopy:
-		err := ac.CopyBlobByURL()
+		err := ac.CopyBlobByURL(config.Replace)
 		if err != nil {
 			log.Fatal(err)
 		}

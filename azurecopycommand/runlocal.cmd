@@ -1,0 +1,1 @@
+go run .\main.go -AzureDefaultAccountName="devstorageaccount1" -AzureDefaultAccountKey="Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==" -copy -source="c:/temp/data/" -dest="http://127.0.0.1:10000/devstorage1/devstorage1/temp/"

@@ -5,6 +5,7 @@ import (
 	"azurecopy/azurecopy/models"
 	"azurecopy/azurecopy/utils/misc"
 	"flag"
+	"fmt"
 
 	log "github.com/Sirupsen/logrus"
 )
@@ -13,6 +14,7 @@ import (
 const (
 	CommandCopy = iota
 	CommandList
+	CommandCreateContainer
 	CommandUnknown
 )
 
@@ -103,14 +105,11 @@ func printContainer(container *models.SimpleContainer, depth int) {
 
 // getCommand. Naive way to determine what the actual user wants to do. Copy, list etc etc.
 // rework when it gets more complex.
-func getCommand(copyCommand bool, listCommand bool) int {
+func getCommand(copyCommand bool, listCommand bool, createContainerCommand string) int {
 
-	if !copyCommand && !listCommand {
+	log.Printf("getCommand")
+	if !copyCommand && !listCommand && createContainerCommand == "" {
 		log.Fatal("No command given")
-	}
-
-	if copyCommand == true && listCommand == true {
-		log.Fatal("Multiple commands given")
 	}
 
 	if copyCommand {
@@ -119,6 +118,11 @@ func getCommand(copyCommand bool, listCommand bool) int {
 
 	if listCommand {
 		return CommandList
+	}
+
+	if createContainerCommand != "" {
+		log.Debug("createcommand issued")
+		return CommandCreateContainer
 	}
 
 	log.Fatal("unsure of command to use")
@@ -133,6 +137,8 @@ func setupConfiguration() *misc.CloudConfig {
 	var debug = flag.Bool("debug", false, "Debug output")
 	var copyCommand = flag.Bool("copy", false, "Copy from source to destination")
 	var listCommand = flag.Bool("list", false, "List contents from source")
+	var createContainerCommand = flag.String("createcontainer", "", "Create container for destination")
+
 	var replace = flag.Bool("replace", true, "Replace blob if already exists")
 
 	var azureDefaultAccountName = flag.String("AzureDefaultAccountName", "", "Default Azure Account Name")
@@ -151,12 +157,15 @@ func setupConfiguration() *misc.CloudConfig {
 
 	flag.Parse()
 
-	config.Command = getCommand(*copyCommand, *listCommand)
+	log.Printf("about to debug")
+	config.Command = getCommand(*copyCommand, *listCommand, *createContainerCommand)
 
 	config.Configuration[misc.Source] = *source
 	config.Configuration[misc.Dest] = *dest
 	config.Debug = *debug
 	config.Replace = *replace
+	config.Configuration[misc.CreateContainerName] = *createContainerCommand
+
 	config.Configuration[misc.AzureDefaultAccountName] = *azureDefaultAccountName
 	config.Configuration[misc.AzureDefaultAccountKey] = *azureDefaultAccountKey
 	config.Configuration[misc.AzureSourceAccountName] = *azureSourceAccountName
@@ -177,6 +186,8 @@ func setupConfiguration() *misc.CloudConfig {
 // "so it begins"
 func main() {
 
+	log.Printf("fooooooo")
+	fmt.Printf("xxxxxx")
 	config := setupConfiguration()
 
 	if !config.Debug {
@@ -203,6 +214,12 @@ func main() {
 
 		container.DisplayContainer("")
 		break
+
+	case CommandCreateContainer:
+		err := ac.CreateContainer(config.Configuration[misc.CreateContainerName])
+		if err != nil {
+			log.Fatal(err)
+		}
 
 	case CommandUnknown:
 		log.Fatal("Unsure of command to execute")

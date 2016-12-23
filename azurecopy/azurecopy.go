@@ -93,6 +93,18 @@ func (ac *AzureCopy) ListContainer() (*models.SimpleContainer, error) {
 	return container, nil
 }
 
+// CreateContainer lists containers/blobs in URL
+func (ac *AzureCopy) CreateContainer(containerName string) error {
+	log.Debugf("CreateContainer %s", containerName)
+
+	_, err := ac.sourceHandler.CreateContainer(containerName)
+	if err != nil {
+		log.Fatal("CreateContainer failed ", err)
+	}
+
+	return nil
+}
+
 // CopyBlobByURL copy a blob from one URL to another.
 func (ac *AzureCopy) CopyBlobByURL(replaceExisting bool) error {
 
@@ -210,8 +222,8 @@ func (ac *AzureCopy) copyAllBlobsInContainer(sourceContainer *models.SimpleConta
 // GetHandlerForURL returns the appropriate handler for a given cloud type.
 func (ac *AzureCopy) GetHandlerForURL(url string, isSource bool, cacheToDisk bool) handlers.CloudHandlerInterface {
 	log.Debugf("GetHandlerForURL %s", url)
-	cloudType, _ := ac.getCloudType(url)
-	handler := utils.GetHandler(cloudType, isSource, ac.config, cacheToDisk)
+	cloudType, isEmulator := ac.getCloudType(url)
+	handler := utils.GetHandler(cloudType, isSource, ac.config, cacheToDisk, isEmulator)
 	return handler
 }
 

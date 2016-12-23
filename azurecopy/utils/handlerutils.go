@@ -10,14 +10,14 @@ import (
 
 // GetHandler gets the appropriate handler for the cloudtype.
 // Should I be doing this another way?
-func GetHandler(cloudType models.CloudType, isSource bool, config misc.CloudConfig, cacheToDisk bool) handlers.CloudHandlerInterface {
+func GetHandler(cloudType models.CloudType, isSource bool, config misc.CloudConfig, cacheToDisk bool, isEmulator bool) handlers.CloudHandlerInterface {
 	switch cloudType {
 	case models.Azure:
 
 		accountName, accountKey := getAzureCredentials(isSource, config)
 
 		log.Debug("Got Azure Handler")
-		ah, _ := handlers.NewAzureHandler(accountName, accountKey, isSource, cacheToDisk)
+		ah, _ := handlers.NewAzureHandler(accountName, accountKey, isSource, cacheToDisk, isEmulator)
 		return ah
 
 	case models.Filesystem:

@@ -429,7 +429,7 @@ func (ah *S3Handler) writeMemoryToBlob(containerName string, blobName string, bu
 	return blockID, nil
 }
 
-func (ah *S3Handler) CreateContainer(parentContainer models.SimpleContainer, containerName string) models.SimpleContainer {
+func (ah *S3Handler) CreateContainer( containerName string) (models.SimpleContainer, error) {
 	var container models.SimpleContainer
 
 	return container

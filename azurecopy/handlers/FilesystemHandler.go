@@ -208,10 +208,10 @@ func (fh *FilesystemHandler) WriteContainer(sourceContainer *models.SimpleContai
 	return nil
 }
 
-func (fh *FilesystemHandler) CreateContainer(parentContainer models.SimpleContainer, containerName string) models.SimpleContainer {
+func (fh *FilesystemHandler) CreateContainer(containerName string) (models.SimpleContainer, error) {
 	var container models.SimpleContainer
 
-	return container
+	return container, nil
 }
 
 // GetContainer gets a container. Populating the subtree? OR NOT? hmmmm

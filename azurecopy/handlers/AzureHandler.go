@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"os"
+	"regexp"
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
@@ -23,16 +24,19 @@ type AzureHandler struct {
 
 	// is this handler for the source or dest?
 	IsSource bool
+
+	// dealing with emulator.
+	IsEmulator bool
 }
 
 // NewAzureHandler factory to create new one. Evil?
-func NewAzureHandler(accountName string, accountKey string, isSource bool, cacheToDisk bool) (*AzureHandler, error) {
+func NewAzureHandler(accountName string, accountKey string, isSource bool, cacheToDisk bool, isEmulator bool) (*AzureHandler, error) {
 	ah := new(AzureHandler)
 
 	ah.cacheToDisk = cacheToDisk
 	ah.cacheLocation = "c:/temp/cache/" // NFI... just making something up for now
 	ah.IsSource = isSource
-
+	ah.IsEmulator = isEmulator
 	var err error
 	var client storage.Client
 
@@ -111,9 +115,15 @@ func (ah *AzureHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleCo
 
 	container, err := ah.getAzureContainer(containerName)
 	if err != nil {
-		log.Fatal(err)
+
+		// cant get container, create it.
+		err = ah.blobStorageClient.CreateContainer(containerName, storage.ContainerAccessTypeBlob)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
+	log.Debugf("Container: %s blobPrefix: %s", container, blobPrefix)
 	subContainer, lastContainer := ah.generateSubContainers(container, blobPrefix)
 
 	if subContainer != nil {
@@ -194,14 +204,35 @@ func (ah *AzureHandler) validateURL(URL string) (string, string, string, error) 
 
 	lowerURL := strings.ToLower(URL)
 
-	// trim azure://
-	lowerURL = lowerURL[len("https://"):]
+	// ugly, do this properly!!! TODO(kpfaulkner)
+	pruneCount := 0
+	match, _ := regexp.MatchString("http://", lowerURL)
+	if match {
+		pruneCount = 7
+	}
+
+	match, _ = regexp.MatchString("https://", lowerURL)
+	if match {
+		pruneCount = 8
+	}
+
+	// trim protocol
+	lowerURL = lowerURL[pruneCount:]
 	sp := strings.Split(lowerURL, "/")
 
 	sp2 := strings.Split(sp[0], ".")
 	accountName := sp2[0]
-	containerName := sp[1]
-	blobName := strings.Join(sp[2:], "/")
+
+	var containerName string
+	var blobName string
+
+	if !ah.IsEmulator {
+		containerName = sp[1]
+		blobName = strings.Join(sp[2:], "/")
+	} else {
+		containerName = sp[2]
+		blobName = strings.Join(sp[3:], "/")
+	}
 
 	return accountName, containerName, blobName, nil
 }
@@ -307,6 +338,7 @@ func (ah *AzureHandler) WriteContainer(sourceContainer *models.SimpleContainer, 
 func (ah *AzureHandler) WriteBlob(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
 
 	log.Debugf("AzureHandler::WriteBlob")
+
 	var err error
 	if ah.cacheToDisk {
 		err = ah.writeBlobFromCache(destContainer, sourceBlob)
@@ -340,15 +372,20 @@ func (ah *AzureHandler) getContainerAndBlobNames(destContainer *models.SimpleCon
 
 // writeBlobFromCache.. read the cache file and pass the byte slice onto the real writer.
 func (ah *AzureHandler) writeBlobFromCache(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
+	log.Debugf("writeBlobFromCache %s", sourceBlob.DataCachedAtPath)
 
 	azureContainerName, azureBlobName := ah.getContainerAndBlobNames(destContainer, sourceBlob.Name)
-
-	log.Debugf("writeBlobFromCache %s", sourceBlob.DataCachedAtPath)
+	err := ah.blobStorageClient.CreateContainer(azureContainerName, storage.ContainerAccessTypePrivate)
+	if err != nil {
+		log.Fatal(err)
+		return err
+	}
 
 	// file stream for cache.
 	var cacheFile *os.File
+
 	// need to get cache dir from somewhere!
-	cacheFile, err := os.OpenFile(sourceBlob.DataCachedAtPath, os.O_RDONLY, 0)
+	cacheFile, err = os.OpenFile(sourceBlob.DataCachedAtPath, os.O_RDONLY, 0)
 	if err != nil {
 		log.Fatal(err)
 		return err
@@ -390,6 +427,11 @@ func (ah *AzureHandler) writeBlobFromCache(destContainer *models.SimpleContainer
 func (ah *AzureHandler) writeBlobFromMemory(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
 
 	azureContainerName, azureBlobName := ah.getContainerAndBlobNames(destContainer, sourceBlob.Name)
+	err := ah.blobStorageClient.CreateContainer(azureContainerName, storage.ContainerAccessTypePrivate)
+	if err != nil {
+		log.Fatal(err)
+		return err
+	}
 
 	totalBytes := len(sourceBlob.DataInMemory)
 	bufferSize := 1024 * 100
@@ -419,7 +461,7 @@ func (ah *AzureHandler) writeBlobFromMemory(destContainer *models.SimpleContaine
 	}
 
 	// finialize the blob
-	err := ah.putBlockIDList(destContainer.Name, sourceBlob.Name, blockIDList)
+	err = ah.putBlockIDList(destContainer.Name, sourceBlob.Name, blockIDList)
 	if err != nil {
 		log.Fatal("putBlockIDList failed ", err)
 	}
@@ -469,10 +511,18 @@ func (ah *AzureHandler) writeMemoryToBlob(containerName string, blobName string,
 	return blockID, nil
 }
 
-func (ah *AzureHandler) CreateContainer(parentContainer models.SimpleContainer, containerName string) models.SimpleContainer {
+// CreateContainer creates an Azure container.
+// ie will only do ROOT level containers (ie REAL Azure container)
+func (ah *AzureHandler) CreateContainer(containerName string) (models.SimpleContainer, error) {
 	var container models.SimpleContainer
+	log.Debugf("CreateContainer %s", containerName)
 
-	return container
+	err := ah.blobStorageClient.CreateContainer(containerName, storage.ContainerAccessTypeBlob)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return container, nil
 }
 
 // GetContainer gets a container. Populating the subtree? OR NOT? hmmmm

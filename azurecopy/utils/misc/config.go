@@ -25,6 +25,9 @@ const (
 	Source  = "Source"
 	Dest    = "Dest"
 	Replace = "Replace"
+
+	// container name to create.
+	CreateContainerName = "CreateContainer"
 )
 
 // CloudConfig UGLY UGLY UGLY way to store the configuration.

@@ -5,7 +5,6 @@ import (
 	"azurecopy/azurecopy/models"
 	"azurecopy/azurecopy/utils/misc"
 	"flag"
-	"fmt"
 
 	log "github.com/Sirupsen/logrus"
 )
@@ -107,7 +106,6 @@ func printContainer(container *models.SimpleContainer, depth int) {
 // rework when it gets more complex.
 func getCommand(copyCommand bool, listCommand bool, createContainerCommand string) int {
 
-	log.Printf("getCommand")
 	if !copyCommand && !listCommand && createContainerCommand == "" {
 		log.Fatal("No command given")
 	}
@@ -157,7 +155,6 @@ func setupConfiguration() *misc.CloudConfig {
 
 	flag.Parse()
 
-	log.Printf("about to debug")
 	config.Command = getCommand(*copyCommand, *listCommand, *createContainerCommand)
 
 	config.Configuration[misc.Source] = *source
@@ -186,8 +183,6 @@ func setupConfiguration() *misc.CloudConfig {
 // "so it begins"
 func main() {
 
-	log.Printf("fooooooo")
-	fmt.Printf("xxxxxx")
 	config := setupConfiguration()
 
 	if !config.Debug {

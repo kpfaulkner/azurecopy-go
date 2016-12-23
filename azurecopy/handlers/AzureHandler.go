@@ -40,7 +40,9 @@ func NewAzureHandler(accountName string, accountKey string, isSource bool, cache
 	var err error
 	var client storage.Client
 
-	if accountName == "" && accountKey == "" {
+	log.Debugf("Azure IsEmulator %s", ah.IsEmulator)
+
+	if isEmulator || (accountName == "" && accountKey == "") {
 		client, err = storage.NewEmulatorClient()
 	} else {
 		client, err = storage.NewBasicClient(accountName, accountKey)
@@ -375,7 +377,7 @@ func (ah *AzureHandler) writeBlobFromCache(destContainer *models.SimpleContainer
 	log.Debugf("writeBlobFromCache %s", sourceBlob.DataCachedAtPath)
 
 	azureContainerName, azureBlobName := ah.getContainerAndBlobNames(destContainer, sourceBlob.Name)
-	err := ah.blobStorageClient.CreateContainer(azureContainerName, storage.ContainerAccessTypePrivate)
+	_, err := ah.blobStorageClient.CreateContainerIfNotExists(azureContainerName, storage.ContainerAccessTypePrivate)
 	if err != nil {
 		log.Fatal(err)
 		return err
@@ -427,7 +429,7 @@ func (ah *AzureHandler) writeBlobFromCache(destContainer *models.SimpleContainer
 func (ah *AzureHandler) writeBlobFromMemory(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
 
 	azureContainerName, azureBlobName := ah.getContainerAndBlobNames(destContainer, sourceBlob.Name)
-	err := ah.blobStorageClient.CreateContainer(azureContainerName, storage.ContainerAccessTypePrivate)
+	_, err := ah.blobStorageClient.CreateContainerIfNotExists(azureContainerName, storage.ContainerAccessTypePrivate)
 	if err != nil {
 		log.Fatal(err)
 		return err

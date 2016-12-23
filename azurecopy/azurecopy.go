@@ -143,7 +143,7 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replac
 
 	deepestContainer, err := ac.sourceHandler.GetSpecificSimpleContainer(sourceURL)
 	if err != nil {
-		log.Fatal("CopyContainerByURL failed ", err)
+		log.Fatal("CopyContainerByURL failed source ", err)
 	}
 
 	// get the blobs for the deepest vdir which is part of the URL.
@@ -151,7 +151,7 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replac
 
 	deepestDestinationContainer, err := ac.destHandler.GetSpecificSimpleContainer(destURL)
 	if err != nil {
-		log.Fatal("CopyContainerByURL failed ", err)
+		log.Fatal("CopyContainerByURL failed dest ", err)
 	}
 
 	// recursive...  dangerous...

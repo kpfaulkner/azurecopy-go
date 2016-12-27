@@ -163,7 +163,7 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replac
 
 	// get container contents over channel.
 	// get the blobs for the deepest vdir which is part of the URL.
-	err = ac.sourceHandler.GetContainerContentsOverChannel(*deepestContainer, readChannel)
+	go ac.sourceHandler.GetContainerContentsOverChannel(*deepestContainer, readChannel)
 	if err != nil {
 		log.Fatalf("CopyContainerByURL err %s", err)
 	}
@@ -194,11 +194,9 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replac
 }
 
 // copyAllBlobsInContainer recursively copies all blobs (in sub containers) to the destination.
+// Have wrapper function to implementCopyAllBlobsInContainer since we have recursive calls and cant have recursive wg.Done's
 func (ac *AzureCopy) copyAllBlobsInContainer(sourceContainer *models.SimpleContainer, destContainer *models.SimpleContainer, prefix string, replaceExisting bool) error {
-
-	log.Debug("copyAllBlobsInContainer")
 	defer wg.Done()
-	log.Debug("copyAllBlobsInContainer2")
 	return ac.implementCopyAllBlobsInContainer(sourceContainer, destContainer, prefix, replaceExisting)
 
 }

@@ -151,11 +151,10 @@ func (ah *AzureHandler) GetContainerContentsOverChannel(sourceContainer models.S
 	// now we have the azure container and the prefix, we should be able to get a list of
 	// SimpleContainers and SimpleBlobs to add this to original container.
 	// Keep max results to 1000, can loop through and
-	params := storage.ListBlobsParameters{Prefix: blobPrefix, MaxResults: 1000}
+	params := storage.ListBlobsParameters{Prefix: blobPrefix, MaxResults: 2}
 
 	done := false
 	for done == false {
-
 		// copy of container, dont want to send back ever growing container via the channel.
 		containerClone := *azureContainer
 		blobListResponse, err := ah.blobStorageClient.ListBlobs(containerClone.Name, params)
@@ -176,6 +175,7 @@ func (ah *AzureHandler) GetContainerContentsOverChannel(sourceContainer models.S
 		}
 	}
 
+	close(blobChannel)
 	return nil
 }
 

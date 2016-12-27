@@ -148,10 +148,13 @@ func setupConfiguration() *misc.CloudConfig {
 
 	var s3DefaultAccessID = flag.String("S3DefaultAccessID", "", "Default S3 Access ID")
 	var s3DefaultAccessSecret = flag.String("S3DefaultAccessSecret", "", "Default S3 Access Secret")
+	var s3DefaultRegion = flag.String("S3DefaultRegion", "", "Default S3 Region")
 	var s3SourceAccessID = flag.String("S3SourceAccessID", "", "Source S3 Access ID")
 	var s3SourceAccessSecret = flag.String("S3SourceAccessSecret", "", "Source S3 Access Secret")
+	var s3SourceRegion = flag.String("S3SourceRegion", "", "Source S3 Region")
 	var s3DestAccessID = flag.String("S3DestAccessID", "", "Destination S3 Access ID")
 	var s3DestAccessSecret = flag.String("S3DestAccessSecret", "", "Destination S3 Access Secret")
+	var s3DestRegion = flag.String("S3DestRegion", "", "Destination S3 Region")
 
 	flag.Parse()
 
@@ -172,10 +175,13 @@ func setupConfiguration() *misc.CloudConfig {
 
 	config.Configuration[misc.S3DefaultAccessID] = *s3DefaultAccessID
 	config.Configuration[misc.S3DefaultAccessSecret] = *s3DefaultAccessSecret
+	config.Configuration[misc.S3DefaultRegion] = *s3DefaultRegion
 	config.Configuration[misc.S3SourceAccessID] = *s3SourceAccessID
 	config.Configuration[misc.S3SourceAccessSecret] = *s3SourceAccessSecret
+	config.Configuration[misc.S3SourceRegion] = *s3SourceRegion
 	config.Configuration[misc.S3DestAccessID] = *s3DestAccessID
 	config.Configuration[misc.S3DestAccessSecret] = *s3DestAccessSecret
+	config.Configuration[misc.S3DestRegion] = *s3DestRegion
 
 	return config
 }

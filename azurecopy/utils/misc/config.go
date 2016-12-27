@@ -15,10 +15,15 @@ const (
 	// S3
 	S3DefaultAccessID     = "S3DefaultAccessID"
 	S3DefaultAccessSecret = "S3DefaultAccessSecret"
-	S3SourceAccessID      = "S3SourceAccessID"
-	S3SourceAccessSecret  = "S3SourceAccessSecret"
-	S3DestAccessID        = "S3DestAccessID"
-	S3DestAccessSecret    = "S3DestAccessSecret"
+	S3DefaultRegion       = "S3DefaultRegion"
+
+	S3SourceAccessID     = "S3SourceAccessID"
+	S3SourceAccessSecret = "S3SourceAccessSecret"
+	S3SourceRegion       = "S3SourceRegion"
+
+	S3DestAccessID     = "S3DestAccessID"
+	S3DestAccessSecret = "S3DestAccessSecret"
+	S3DestRegion       = "S3DestRegion"
 
 	// debug
 	Debug   = "Debug"

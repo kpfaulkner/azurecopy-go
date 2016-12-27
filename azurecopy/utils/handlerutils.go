@@ -24,6 +24,14 @@ func GetHandler(cloudType models.CloudType, isSource bool, config misc.CloudConf
 		log.Debug("Got Filesystem Handler")
 		fh, _ := handlers.NewFilesystemHandler("c:/temp/", isSource) // default path?
 		return fh
+
+	case models.S3:
+		log.Debug("Got S3 Handler")
+		accessID, accessSecret := getS3Credentials(isSource, config)
+
+		sh, _ := handlers.NewS3Handler(accessID, accessSecret, isSource, true)
+		return sh
+
 	}
 
 	return nil
@@ -44,4 +52,21 @@ func getAzureCredentials(isSource bool, config misc.CloudConfig) (accountName st
 	}
 
 	return accountName, accountKey
+}
+
+func getS3Credentials(isSource bool, config misc.CloudConfig) (accessID string, accessSecret string) {
+	if isSource {
+		accessID = config.Configuration[misc.S3SourceAccessID]
+		accessSecret = config.Configuration[misc.S3SourceAccessSecret]
+	} else {
+		accessID = config.Configuration[misc.S3DestAccessID]
+		accessSecret = config.Configuration[misc.S3DestAccessSecret]
+	}
+
+	if accessID == "" || accessSecret == "" {
+		accessID = config.Configuration[misc.S3DefaultAccessID]
+		accessSecret = config.Configuration[misc.S3DefaultAccessSecret]
+	}
+
+	return accessID, accessSecret
 }

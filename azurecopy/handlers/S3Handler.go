@@ -80,6 +80,14 @@ func (sh *S3Handler) convertURL(URL string) string {
 
 }
 
+// GetContainerContentsOverChannel given a URL (ending in /) returns all the contents of the container over a channel
+// This is going to be inefficient from a memory allocation pov.
+// Am still creating various structs that we strictly do not require for copying (all the tree structure etc) but this will
+// at least help each cloud provider be consistent from a dev pov. Think it's worth the overhead. TODO(kpfaulkner) confirm :)
+func (sh *S3Handler) GetContainerContentsOverChannel(sourceContainer models.SimpleContainer, blobChannel chan models.SimpleContainer) error {
+	return nil
+}
+
 // GetSpecificSimpleContainer for S3 will be the bucket.
 // Conversion from https://bucketname.s3.amazonaws.com/myblob to https://s3.amazonaws.com/bucketname/myblob is done first.
 func (sh *S3Handler) GetSpecificSimpleContainer(URL string) (*models.SimpleContainer, error) {
@@ -107,6 +115,8 @@ func (sh *S3Handler) GetSpecificSimpleContainer(URL string) (*models.SimpleConta
 	if err != nil {
 		log.Fatal("GetSpecificSimpleContainer err", err)
 	}
+
+	log.Printf("contents %s", contents)
 
 	lastContainer := models.NewSimpleContainer()
 

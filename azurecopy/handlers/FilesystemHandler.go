@@ -308,10 +308,26 @@ func (fh *FilesystemHandler) BlobExists(container models.SimpleContainer, blobNa
 // getSubContainer gets an existing subcontainer with parent of container and name of segment.
 // otherwise it creates it, adds it to the parent container and returns the new one.
 func (fh *FilesystemHandler) getSubContainer(container *models.SimpleContainer, segment string) *models.SimpleContainer {
-
 	// create a new one.
 	newContainer := models.SimpleContainer{}
 	return &newContainer
+}
+
+// GetContainerContentsOverChannel given a URL (ending in /) returns all the contents of the container over a channel
+// This is going to be inefficient from a memory allocation pov.
+// Am still creating various structs that we strictly do not require for copying (all the tree structure etc) but this will
+// at least help each cloud provider be consistent from a dev pov. Think it's worth the overhead. TODO(kpfaulkner) confirm :)
+func (fh *FilesystemHandler) GetContainerContentsOverChannel(sourceContainer models.SimpleContainer, blobChannel chan models.SimpleContainer) error {
+
+	log.Debugf("FilesystemHandler GetContainerContentsOverChannel")
+
+	fh.GetContainerContents(&sourceContainer)
+	blobChannel <- sourceContainer
+
+	log.Debug("about to close read channel")
+
+	close(blobChannel)
+	return nil
 }
 
 // GetSpecificSimpleContainer given a URL (ending in /) then get the SIMPLE container that represents it.

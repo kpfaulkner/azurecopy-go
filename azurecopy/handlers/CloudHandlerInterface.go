@@ -19,6 +19,12 @@ type CloudHandlerInterface interface {
 	// GetSpecificSimpleContainer given a URL (ending in /) then get the SIMPLE container that represents it.
 	GetSpecificSimpleContainer(URL string) (*models.SimpleContainer, error)
 
+	// GetContainerContentsOverChannel given a URL (ending in /) returns all the contents of the container over a channel
+	// This is going to be inefficient from a memory allocation pov.
+	// Am still creating various structs that we strictly do not require for copying (all the tree structure etc) but this will
+	// at least help each cloud provider be consistent from a dev pov. Think it's worth the overhead. TODO(kpfaulkner) confirm :)
+	GetContainerContentsOverChannel(sourceContainer models.SimpleContainer, blobChannel chan models.SimpleContainer) error
+
 	// GetSpecificSimpleBlob given a URL (NOT ending in /) then get the SIMPLE blob that represents it.
 	GetSpecificSimpleBlob(URL string) (*models.SimpleBlob, error)
 

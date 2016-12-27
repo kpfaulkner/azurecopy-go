@@ -138,6 +138,47 @@ func (ah *AzureHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleCo
 	return lastContainer, nil
 }
 
+// GetContainerContentsOverChannel given a URL (ending in /) returns all the contents of the container over a channel
+// This is going to be inefficient from a memory allocation pov.
+// Am still creating various structs that we strictly do not require for copying (all the tree structure etc) but this will
+// at least help each cloud provider be consistent from a dev pov. Think it's worth the overhead. TODO(kpfaulkner) confirm :)
+func (ah *AzureHandler) GetContainerContentsOverChannel(sourceContainer models.SimpleContainer, blobChannel chan models.SimpleContainer) error {
+
+	azureContainer, blobPrefix := azurehelper.GetContainerAndBlobPrefix(&sourceContainer)
+
+	log.Debugf("Blob Prefix %s", blobPrefix)
+
+	// now we have the azure container and the prefix, we should be able to get a list of
+	// SimpleContainers and SimpleBlobs to add this to original container.
+	// Keep max results to 1000, can loop through and
+	params := storage.ListBlobsParameters{Prefix: blobPrefix, MaxResults: 1000}
+
+	done := false
+	for done == false {
+
+		// copy of container, dont want to send back ever growing container via the channel.
+		containerClone := *azureContainer
+		blobListResponse, err := ah.blobStorageClient.ListBlobs(containerClone.Name, params)
+		if err != nil {
+			log.Fatal("Error")
+		}
+
+		ah.populateSimpleContainer(blobListResponse, &containerClone)
+
+		// return entire container via channel.
+		blobChannel <- containerClone
+
+		// if marker, then keep going.
+		if blobListResponse.NextMarker != "" {
+			params.Marker = blobListResponse.NextMarker
+		} else {
+			done = true
+		}
+	}
+
+	return nil
+}
+
 func (ah *AzureHandler) generateSubContainers(azureContainer *models.SimpleContainer, blobPrefix string) (*models.SimpleContainer, *models.SimpleContainer) {
 
 	log.Debugf("generateSubContainers %s : prefix %s", azureContainer.Name, blobPrefix)
@@ -541,6 +582,8 @@ func (ah *AzureHandler) GetContainer(containerName string) models.SimpleContaine
 //
 // For Azure only the children of the root node can be a real azure container. Everything else
 // is a blob or a blob pretending to have vdirs.
+//
+// TODO(kpfaulkner) use marker and get next lot of results when we have > 5000 blobs.
 func (ah *AzureHandler) GetContainerContents(container *models.SimpleContainer) {
 
 	azureContainer, blobPrefix := azurehelper.GetContainerAndBlobPrefix(container)

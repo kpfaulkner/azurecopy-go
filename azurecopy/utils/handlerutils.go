@@ -27,9 +27,9 @@ func GetHandler(cloudType models.CloudType, isSource bool, config misc.CloudConf
 
 	case models.S3:
 		log.Debug("Got S3 Handler")
-		accessID, accessSecret := getS3Credentials(isSource, config)
+		accessID, accessSecret, region := getS3Credentials(isSource, config)
 
-		sh, _ := handlers.NewS3Handler(accessID, accessSecret, isSource, true)
+		sh, _ := handlers.NewS3Handler(accessID, accessSecret, region, isSource, true)
 		return sh
 
 	}
@@ -54,19 +54,22 @@ func getAzureCredentials(isSource bool, config misc.CloudConfig) (accountName st
 	return accountName, accountKey
 }
 
-func getS3Credentials(isSource bool, config misc.CloudConfig) (accessID string, accessSecret string) {
+func getS3Credentials(isSource bool, config misc.CloudConfig) (accessID string, accessSecret string, region string) {
 	if isSource {
 		accessID = config.Configuration[misc.S3SourceAccessID]
 		accessSecret = config.Configuration[misc.S3SourceAccessSecret]
+		region = config.Configuration[misc.S3SourceRegion]
 	} else {
 		accessID = config.Configuration[misc.S3DestAccessID]
 		accessSecret = config.Configuration[misc.S3DestAccessSecret]
+		region = config.Configuration[misc.S3DestRegion]
 	}
 
 	if accessID == "" || accessSecret == "" {
 		accessID = config.Configuration[misc.S3DefaultAccessID]
 		accessSecret = config.Configuration[misc.S3DefaultAccessSecret]
+		region = config.Configuration[misc.S3DefaultRegion]
 	}
 
-	return accessID, accessSecret
+	return accessID, accessSecret, region
 }

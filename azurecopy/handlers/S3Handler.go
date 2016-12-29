@@ -27,7 +27,7 @@ type S3Handler struct {
 }
 
 // NewS3Handler factory to create new one. Evil?
-func NewS3Handler(accessID string, accessSecret string, isSource bool, cacheToDisk bool) (*S3Handler, error) {
+func NewS3Handler(accessID string, accessSecret string, region string, isSource bool, cacheToDisk bool) (*S3Handler, error) {
 	sh := new(S3Handler)
 
 	sh.cacheToDisk = cacheToDisk
@@ -40,7 +40,7 @@ func NewS3Handler(accessID string, accessSecret string, isSource bool, cacheToDi
 		log.Fatalf("Bad S3 credentials: %s", err)
 	}
 
-	cfg := aws.NewConfig().WithRegion("us-west-1").WithCredentials(creds)
+	cfg := aws.NewConfig().WithRegion(region).WithCredentials(creds)
 
 	log.Print(cfg)
 	sh.s3Client = s3.New(session.New(), cfg)

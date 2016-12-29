@@ -4,7 +4,7 @@ import "azurecopy/azurecopy/models"
 
 // GetAzureContainer Gets the REAL Azure container and the blob prefix for a given SimpleContainer
 // that has been passed in.
-func GetContainerAndBlobPrefix(container *models.SimpleContainer) (*models.SimpleContainer, string) {
+func GetContainerAndBlobPrefixXXX(container *models.SimpleContainer) (*models.SimpleContainer, string) {
 	var p *models.SimpleContainer
 	blobPrefix := ""
 	var azureContainer *models.SimpleContainer

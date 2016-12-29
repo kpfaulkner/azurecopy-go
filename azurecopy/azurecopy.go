@@ -92,7 +92,92 @@ func (ac *AzureCopy) ListContainer() (*models.SimpleContainer, error) {
 	// get the blobs for the deepest vdir which is part of the URL.
 	ac.sourceHandler.GetContainerContents(container)
 
+	/*
+		// make channel
+		readChannel := make(chan models.SimpleContainer, 1000)
+
+		// get container contents over channel.
+		// get the blobs for the deepest vdir which is part of the URL.
+		go ac.sourceHandler.GetContainerContentsOverChannel(*container, readChannel)
+		if err != nil {
+			log.Fatalf("ListContainer err %s", err)
+		}
+
+		log.Debug("about to loop")
+
+		for {
+			// get data read.
+			containerDetails, ok := <-readChannel
+			if !ok {
+				log.Debug("breaking, read channel closed")
+
+				// channel closed. We're done now.
+				break
+			}
+			// merge containerDetails into original container
+			ac.mergeContainerDetails(&containerDetails, container)
+		}
+	*/
 	return container, nil
+}
+
+// mergeContainerDetails takes blobs/containers in containerDetails and merges it into container.
+// for this scenario it is ASSUMED ( TODO(kpfaulkner) add verification for this) that both containerDetials and container
+// are starting at the same level/depth/container. ie we dont need to jump around reparenting children at different levels.
+func (ac *AzureCopy) mergeContainerDetails(containerDetails *models.SimpleContainer, parentContainer *models.SimpleContainer) error {
+
+	// loop through all blobs. add to container
+	for _, blob := range containerDetails.BlobSlice {
+		blob.ParentContainer = parentContainer
+		parentContainer.BlobSlice = append(parentContainer.BlobSlice, blob)
+	}
+
+	// loop through all subcontainers, recursive.
+	for _, c := range containerDetails.ContainerSlice {
+
+		// check if container name exists in parentContainer
+		containerExists, container := containerExists(c.Name, parentContainer)
+
+		if containerExists {
+			// container exists, so need to merge results with existing container.
+
+		} else {
+			// container doesn't exist, just add to container slice.
+			c.ParentContainer = parentContainer
+			container.ContainerSlice = append(container.ContainerSlice, c)
+		}
+	}
+
+	return nil
+}
+
+// add to container...
+func (ac *AzureCopy) addToContainer(newContainer *models.SimpleContainer, parentContainer *models.SimpleContainer) error {
+
+	found := false
+	for _, c := range parentContainer.ContainerSlice {
+		if c.Name == newContainer.Name {
+			// found match... add blobs here?
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		// add new
+	}
+	return false, nil
+}
+
+// check if containerName exists as subcontainer of parentContainer.
+func (ac *AzureCopy) containerExists(containerName string, parentContainer *models.SimpleContainer) (bool, *models.SimpleContainer) {
+
+	for _, c := range parentContainer.ContainerSlice {
+		if c.Name == containerName {
+			return true, c
+		}
+	}
+	return false, nil
 }
 
 // CreateContainer lists containers/blobs in URL

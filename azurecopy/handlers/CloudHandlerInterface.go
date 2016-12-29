@@ -47,5 +47,5 @@ type CloudHandlerInterface interface {
 	GetContainer(containerName string) models.SimpleContainer
 
 	// populates container with data.
-	GetContainerContents(container *models.SimpleContainer)
+	GetContainerContents(container *models.SimpleContainer) error
 }

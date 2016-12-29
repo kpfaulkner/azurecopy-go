@@ -15,6 +15,7 @@ const (
 	CommandList
 	CommandCreateContainer
 	CommandUnknown
+	CommandListContainer
 )
 
 /*
@@ -213,6 +214,7 @@ func main() {
 			log.Fatal(err)
 		}
 
+		log.Debug("List results")
 		container.DisplayContainer("")
 		break
 

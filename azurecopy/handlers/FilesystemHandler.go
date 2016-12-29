@@ -238,7 +238,7 @@ func (fh *FilesystemHandler) generateFullPath(container *models.SimpleContainer)
 
 // GetContainerContents populates the container (directory) with the next level contents
 // currently wont do recursive.
-func (fh *FilesystemHandler) GetContainerContents(container *models.SimpleContainer) {
+func (fh *FilesystemHandler) GetContainerContents(container *models.SimpleContainer) error {
 
 	log.Debugf("filesystem container %s", container.Name)
 	fullPath := fh.generateFullPath(container)
@@ -278,6 +278,7 @@ func (fh *FilesystemHandler) GetContainerContents(container *models.SimpleContai
 	}
 	container.Populated = true
 
+	return nil
 }
 
 // populateSimpleContainer takes a list of Azure blobs and breaks them into virtual directories (SimpleContainers) and
@@ -319,14 +320,6 @@ func (fh *FilesystemHandler) getSubContainer(container *models.SimpleContainer, 
 // at least help each cloud provider be consistent from a dev pov. Think it's worth the overhead. TODO(kpfaulkner) confirm :)
 func (fh *FilesystemHandler) GetContainerContentsOverChannel(sourceContainer models.SimpleContainer, blobChannel chan models.SimpleContainer) error {
 
-	log.Debugf("FilesystemHandler GetContainerContentsOverChannel")
-
-	fh.GetContainerContents(&sourceContainer)
-	blobChannel <- sourceContainer
-
-	log.Debug("about to close read channel")
-
-	close(blobChannel)
 	return nil
 }
 

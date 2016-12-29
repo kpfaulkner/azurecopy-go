@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"azurecopy/azurecopy/models"
-	"azurecopy/azurecopy/utils/azurehelper"
+	"azurecopy/azurecopy/utils/containerutils"
 	"encoding/base64"
 	"errors"
 	"os"
@@ -144,9 +144,8 @@ func (ah *AzureHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleCo
 // at least help each cloud provider be consistent from a dev pov. Think it's worth the overhead. TODO(kpfaulkner) confirm :)
 func (ah *AzureHandler) GetContainerContentsOverChannel(sourceContainer models.SimpleContainer, blobChannel chan models.SimpleContainer) error {
 
-	azureContainer, blobPrefix := azurehelper.GetContainerAndBlobPrefix(&sourceContainer)
-
-	log.Debugf("Blob Prefix %s", blobPrefix)
+	log.Debug("GetContainerContentsOverChannel start")
+	azureContainer, blobPrefix := containerutils.GetContainerAndBlobPrefix(&sourceContainer)
 
 	// now we have the azure container and the prefix, we should be able to get a list of
 	// SimpleContainers and SimpleBlobs to add this to original container.
@@ -160,6 +159,10 @@ func (ah *AzureHandler) GetContainerContentsOverChannel(sourceContainer models.S
 		blobListResponse, err := ah.blobStorageClient.ListBlobs(containerClone.Name, params)
 		if err != nil {
 			log.Fatal("Error")
+		}
+
+		for _, b := range blobListResponse.Blobs {
+			log.Debugf("blob %s", b.Name)
 		}
 
 		ah.populateSimpleContainer(blobListResponse, &containerClone)
@@ -399,7 +402,7 @@ func (ah *AzureHandler) WriteBlob(destContainer *models.SimpleContainer, sourceB
 
 func (ah *AzureHandler) getContainerAndBlobNames(destContainer *models.SimpleContainer, sourceBlobName string) (string, string) {
 
-	azureContainer, blobPrefix := azurehelper.GetContainerAndBlobPrefix(destContainer)
+	azureContainer, blobPrefix := containerutils.GetContainerAndBlobPrefix(destContainer)
 	azureContainerName := azureContainer.Name
 
 	var azureBlobName string
@@ -584,15 +587,14 @@ func (ah *AzureHandler) GetContainer(containerName string) models.SimpleContaine
 // is a blob or a blob pretending to have vdirs.
 //
 // TODO(kpfaulkner) use marker and get next lot of results when we have > 5000 blobs.
-func (ah *AzureHandler) GetContainerContents(container *models.SimpleContainer) {
+func (ah *AzureHandler) GetContainerContents(container *models.SimpleContainer) error {
 
-	azureContainer, blobPrefix := azurehelper.GetContainerAndBlobPrefix(container)
+	log.Debug("GetContainerContents")
+	azureContainer, blobPrefix := containerutils.GetContainerAndBlobPrefix(container)
 
 	// now we have the azure container and the prefix, we should be able to get a list of
 	// SimpleContainers and SimpleBlobs to add this to original container.
 	params := storage.ListBlobsParameters{Prefix: blobPrefix}
-
-	log.Debugf("Blob Prefix %s", blobPrefix)
 
 	blobListResponse, err := ah.blobStorageClient.ListBlobs(azureContainer.Name, params)
 	if err != nil {
@@ -600,6 +602,8 @@ func (ah *AzureHandler) GetContainerContents(container *models.SimpleContainer) 
 	}
 
 	ah.populateSimpleContainer(blobListResponse, azureContainer)
+
+	return nil
 }
 
 // populateSimpleContainer takes a list of Azure blobs and breaks them into virtual directories (SimpleContainers) and

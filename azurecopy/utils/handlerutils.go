@@ -4,6 +4,8 @@ import (
 	"azurecopy/azurecopy/handlers"
 	"azurecopy/azurecopy/models"
 	"azurecopy/azurecopy/utils/misc"
+	"crypto/md5"
+	"encoding/hex"
 
 	log "github.com/Sirupsen/logrus"
 )
@@ -35,6 +37,12 @@ func GetHandler(cloudType models.CloudType, isSource bool, config misc.CloudConf
 	}
 
 	return nil
+}
+
+func GenerateCacheName(path string) string {
+	hasher := md5.New()
+	hasher.Write([]byte(path))
+	return hex.EncodeToString(hasher.Sum(nil))
 }
 
 func getAzureCredentials(isSource bool, config misc.CloudConfig) (accountName string, accountKey string) {

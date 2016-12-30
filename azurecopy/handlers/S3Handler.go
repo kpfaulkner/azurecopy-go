@@ -3,7 +3,9 @@ package handlers
 import (
 	"azurecopy/azurecopy/models"
 	"azurecopy/azurecopy/utils/containerutils"
+	"azurecopy/azurecopy/utils/misc"
 	"errors"
+	"os"
 	"regexp"
 	"strings"
 
@@ -92,7 +94,18 @@ func (sh *S3Handler) populateSimpleContainer(s3Objects []*s3.Object, container *
 
 	for _, blob := range s3Objects {
 
+		// if key ends in / then its just a fake directory.
+		// do we even want to store that?
+		// for now, skip it.
+
+		if strings.HasSuffix(*blob.Key, "/") {
+			// skip it.
+			continue
+		}
+
 		sp := strings.Split(*blob.Key, "/")
+
+		log.Debugf("populateSimpleContainer key is %s", *blob.Key)
 
 		// if no / then no subdirs etc. Just add as is.
 		if len(sp) == 1 {
@@ -113,7 +126,6 @@ func (sh *S3Handler) populateSimpleContainer(s3Objects []*s3.Object, container *
 
 				// check if container already has a subcontainer with appropriate name
 				subContainer := sh.getSubContainer(currentContainer, segment)
-
 				if subContainer != nil {
 					// then we have a blob so add it to currentContainer
 					currentContainer = subContainer
@@ -341,8 +353,87 @@ func (sh *S3Handler) ReadBlob(container models.SimpleContainer, blobName string)
 	return blob
 }
 
+// generateS3ContainerName gets the REAL Azure container name for the simpleBlob
+func (sh *S3Handler) generateS3ContainerName(blob models.SimpleBlob) string {
+	currentContainer := blob.ParentContainer
+
+	for currentContainer.ParentContainer != nil {
+		currentContainer = currentContainer.ParentContainer
+	}
+	return currentContainer.Name
+}
+
 // PopulateBlob. Used to read a blob IFF we already have a reference to it.
 func (sh *S3Handler) PopulateBlob(blob *models.SimpleBlob) error {
+
+	log.Debug("S3 Populate blob %s", blob)
+	containerName := sh.generateS3ContainerName(*blob)
+
+	req := &s3.GetObjectInput{
+		Bucket: &containerName,
+		Key:    aws.String(blob.BlobCloudName),
+	}
+
+	objectData, err := sh.s3Client.GetObject(req)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+
+	defer objectData.Body.Close()
+
+	// file stream for cache.
+	var cacheFile *os.File
+
+	// populate this to disk.
+	if sh.cacheToDisk {
+
+		cacheName := misc.GenerateCacheName(containerName + blob.BlobCloudName)
+		blob.DataCachedAtPath = sh.cacheLocation + cacheName
+
+		log.Debugf("data cache path %s", blob.DataCachedAtPath)
+		cacheFile, err = os.OpenFile(blob.DataCachedAtPath, os.O_WRONLY|os.O_CREATE, 0)
+
+		if err != nil {
+			log.Fatal(err)
+			return err
+		}
+	} else {
+		blob.DataInMemory = []byte{}
+	}
+
+	// 100k buffer... way too small?
+	buffer := make([]byte, 1024*100)
+	numBytesRead := 0
+
+	finishedProcessing := false
+	for finishedProcessing == false {
+		numBytesRead, err = objectData.Body.Read(buffer)
+		if err != nil {
+			finishedProcessing = true
+		}
+
+		if numBytesRead <= 0 {
+			finishedProcessing = true
+			continue
+		}
+
+		// if we're caching, write to a file.
+		if sh.cacheToDisk {
+			_, err = cacheFile.Write(buffer[:numBytesRead])
+			if err != nil {
+				log.Fatal(err)
+				return err
+			}
+		} else {
+
+			log.Debugf("adding to memory %d", numBytesRead)
+			// needs to go into a byte array. How do we expand a slice again?
+			blob.DataInMemory = append(blob.DataInMemory, buffer[:numBytesRead]...)
+		}
+	}
+
+	log.Debugf("data in memory is %d", len(blob.DataInMemory))
 
 	return nil
 }

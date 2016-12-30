@@ -3,6 +3,7 @@ package handlers
 import (
 	"azurecopy/azurecopy/models"
 	"azurecopy/azurecopy/utils/containerutils"
+	"azurecopy/azurecopy/utils/misc"
 	"encoding/base64"
 	"errors"
 	"os"
@@ -315,7 +316,8 @@ func (ah *AzureHandler) PopulateBlob(blob *models.SimpleBlob) error {
 	// populate this to disk.
 	if ah.cacheToDisk {
 
-		blob.DataCachedAtPath = ah.cacheLocation + blob.Name
+		cacheName := misc.GenerateCacheName(azureContainerName + blob.BlobCloudName)
+		blob.DataCachedAtPath = ah.cacheLocation + cacheName
 		cacheFile, err = os.OpenFile(blob.DataCachedAtPath, os.O_WRONLY|os.O_CREATE, 0)
 
 		if err != nil {

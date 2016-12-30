@@ -206,7 +206,9 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replac
 			break
 		}
 
-		log.Debugf("containerDetails %s", containerDetails)
+		log.Debugf("containerDetails reading from channel")
+		containerDetails.DisplayContainer("")
+
 		// copy it.
 		// recursive...  dangerous...
 		wg.Add(1)
@@ -222,6 +224,8 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replac
 // copyAllBlobsInContainer recursively copies all blobs (in sub containers) to the destination.
 // Have wrapper function to implementCopyAllBlobsInContainer since we have recursive calls and cant have recursive wg.Done's
 func (ac *AzureCopy) copyAllBlobsInContainer(sourceContainer *models.SimpleContainer, destContainer *models.SimpleContainer, prefix string, replaceExisting bool) error {
+
+	log.Debug("copyAllBlobsInContainer start")
 	defer wg.Done()
 	return ac.implementCopyAllBlobsInContainer(sourceContainer, destContainer, prefix, replaceExisting)
 
@@ -230,8 +234,12 @@ func (ac *AzureCopy) copyAllBlobsInContainer(sourceContainer *models.SimpleConta
 // implementCopyAllBlobsInContainer recursively copies all blobs (in sub containers) to the destination.
 func (ac *AzureCopy) implementCopyAllBlobsInContainer(sourceContainer *models.SimpleContainer, destContainer *models.SimpleContainer, prefix string, replaceExisting bool) error {
 
+	log.Debug("implementCopyAllBlobsInContainer start")
+
 	// copy all blobs
 	for _, blob := range sourceContainer.BlobSlice {
+
+		log.Debugf("blob is %s", blob)
 
 		// check if blob exists if we're not replacing
 		if !replaceExisting {

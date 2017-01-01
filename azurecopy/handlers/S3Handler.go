@@ -4,6 +4,7 @@ import (
 	"azurecopy/azurecopy/models"
 	"azurecopy/azurecopy/utils/containerutils"
 	"azurecopy/azurecopy/utils/misc"
+	"bytes"
 	"errors"
 	"os"
 	"regexp"
@@ -448,6 +449,84 @@ func (sh *S3Handler) WriteContainer(sourceContainer *models.SimpleContainer, des
 // and if the blobName is "myblob" then the REAL underlying Azure structure would be container == "myrealcontainer"
 // and the blob name is vdir/vdir2/myblob
 func (sh *S3Handler) WriteBlob(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
+	log.Debugf("S3Handler::WriteBlob")
+
+	var err error
+	if sh.cacheToDisk {
+		err = sh.writeBlobFromCache(destContainer, sourceBlob)
+	} else {
+		err = sh.writeBlobFromMemory(destContainer, sourceBlob)
+	}
+
+	if err != nil {
+		log.Fatal(err)
+		return err
+	}
+
+	return nil
+}
+
+func (sh *S3Handler) getContainerAndBlobNames(destContainer *models.SimpleContainer, sourceBlobName string) (string, string) {
+
+	container, blobPrefix := containerutils.GetContainerAndBlobPrefix(destContainer)
+	containerName := container.Name
+
+	var blobName string
+
+	if blobPrefix != "" {
+		blobName = blobPrefix + "/" + sourceBlobName
+	} else {
+		blobName = sourceBlobName
+	}
+
+	return containerName, blobName
+}
+
+// writeBlobFromCache.. read the cache file and pass the byte slice onto the real writer.
+func (sh *S3Handler) writeBlobFromCache(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
+	log.Debugf("writeBlobFromCache %s : %s", sourceBlob.Name, sourceBlob.DataCachedAtPath)
+	containerName, blobName := sh.getContainerAndBlobNames(destContainer, sourceBlob.Name)
+
+	// file stream for cache.
+	var cacheFile *os.File
+
+	// need to get cache dir from somewhere!
+	cacheFile, err := os.OpenFile(sourceBlob.DataCachedAtPath, os.O_RDONLY, 0)
+	if err != nil {
+		log.Errorf("Unable to open cache file %s", sourceBlob.DataCachedAtPath)
+		return err
+	}
+
+	params := &s3.PutObjectInput{
+		Bucket: aws.String(containerName),
+		Key:    aws.String(blobName),
+		Body:   cacheFile,
+	}
+	_, err = sh.s3Client.PutObject(params)
+	if err != nil {
+		log.Errorf("Unable to upload %s", blobName)
+		return err
+	}
+
+	return nil
+}
+
+func (sh *S3Handler) writeBlobFromMemory(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
+	log.Debugf("writeBlobFromMemory %s", sourceBlob.DataCachedAtPath)
+	containerName, blobName := sh.getContainerAndBlobNames(destContainer, sourceBlob.Name)
+
+	fileBytes := bytes.NewReader(sourceBlob.DataInMemory) // convert to io.ReadSeeker type
+
+	params := &s3.PutObjectInput{
+		Bucket: aws.String(containerName),
+		Key:    aws.String(blobName),
+		Body:   fileBytes,
+	}
+	_, err := sh.s3Client.PutObject(params)
+	if err != nil {
+		log.Errorf("Unable to upload %s", blobName)
+		return err
+	}
 
 	return nil
 }

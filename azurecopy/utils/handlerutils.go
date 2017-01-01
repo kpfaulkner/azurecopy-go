@@ -4,8 +4,6 @@ import (
 	"azurecopy/azurecopy/handlers"
 	"azurecopy/azurecopy/models"
 	"azurecopy/azurecopy/utils/misc"
-	"crypto/md5"
-	"encoding/hex"
 
 	log "github.com/Sirupsen/logrus"
 )
@@ -24,7 +22,13 @@ func GetHandler(cloudType models.CloudType, isSource bool, config misc.CloudConf
 
 	case models.Filesystem:
 		log.Debug("Got Filesystem Handler")
-		fh, _ := handlers.NewFilesystemHandler("c:/temp/", isSource) // default path?
+		var URL string
+		if isSource {
+			URL = config.Configuration[misc.Source]
+		} else {
+			URL = config.Configuration[misc.Dest]
+		}
+		fh, _ := handlers.NewFilesystemHandler(URL, isSource) // default path?
 		return fh
 
 	case models.S3:
@@ -37,12 +41,6 @@ func GetHandler(cloudType models.CloudType, isSource bool, config misc.CloudConf
 	}
 
 	return nil
-}
-
-func GenerateCacheName(path string) string {
-	hasher := md5.New()
-	hasher.Write([]byte(path))
-	return hex.EncodeToString(hasher.Sum(nil))
 }
 
 func getAzureCredentials(isSource bool, config misc.CloudConfig) (accountName string, accountKey string) {

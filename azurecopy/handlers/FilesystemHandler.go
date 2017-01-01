@@ -271,7 +271,7 @@ func (fh *FilesystemHandler) generateFullPath(container *models.SimpleContainer)
 		currentContainer = currentContainer.ParentContainer
 	}
 
-	fullPath := fh.basePath + path
+	fullPath := fh.basePath + path + "/"
 	log.Debugf("Generated full path of %s", fullPath)
 	return fullPath
 }

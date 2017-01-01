@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"azurecopy/azurecopy/models"
+	"path/filepath"
 	"strings"
 
 	"os"
@@ -36,11 +37,11 @@ func generateBasePath(rootContainerPath string) (string, string) {
 	log.Debugf("generateBasePath %s", rootContainerPath)
 
 	if rootContainerPath != "" {
-		var sp = strings.Split(rootContainerPath, "/")
+		var sp = strings.Split(rootContainerPath, string(os.PathSeparator))
 		l := len(sp)
 		log.Debugf("len sp %d", l)
 
-		genPath := strings.Join(sp[:l-2], "/") + "/"
+		genPath := strings.Join(sp[:l-2], string(os.PathSeparator)) + string(os.PathSeparator)
 		container := sp[l-2]
 
 		return genPath, container
@@ -117,7 +118,7 @@ func (fh *FilesystemHandler) ReadBlob(container models.SimpleContainer, blobName
 	var blob models.SimpleBlob
 
 	dirPath := fh.generateFullPath(&container)
-	fullPath := dirPath + "/" + blobName
+	fullPath := filepath.Join(dirPath, blobName)
 
 	blob.DataCachedAtPath = fullPath
 	blob.BlobInMemory = false
@@ -153,7 +154,7 @@ func (fh *FilesystemHandler) WriteBlob(destContainer *models.SimpleContainer, so
 	log.Debugf("FilesystemHandler::WriteBlob ", sourceBlob.Name)
 
 	blobName := sourceBlob.Name
-	if blobName[0] == '/' {
+	if blobName[0] == os.PathSeparator {
 		blobName = blobName[1:]
 	}
 
@@ -265,13 +266,13 @@ func (fh *FilesystemHandler) generateFullPath(container *models.SimpleContainer)
 	currentContainer := container.ParentContainer
 	for currentContainer != nil {
 		if currentContainer.Name != "" {
-			path = currentContainer.Name + "/" + path
+			path = filepath.Join(currentContainer.Name, path)
 		}
 
 		currentContainer = currentContainer.ParentContainer
 	}
 
-	fullPath := fh.basePath + path + "/"
+	fullPath := fh.basePath + path + string(os.PathSeparator)
 	log.Debugf("Generated full path of %s", fullPath)
 	return fullPath
 }
@@ -311,7 +312,7 @@ func (fh *FilesystemHandler) GetContainerContents(container *models.SimpleContai
 			b.Name = f.Name()
 			b.ParentContainer = container
 			b.Origin = models.Filesystem
-			b.URL = fh.generateFullPath(container) + "/" + b.Name
+			b.URL = filepath.Join(fh.generateFullPath(container), b.Name)
 			container.BlobSlice = append(container.BlobSlice, &b)
 
 		}
@@ -335,7 +336,7 @@ func (fh *FilesystemHandler) populateSimpleContainer(blobListResponse storage.Bl
 // BlobExists checks if blob already exists
 func (fh *FilesystemHandler) BlobExists(container models.SimpleContainer, blobName string) (bool, error) {
 
-	if blobName[0] == '/' {
+	if blobName[0] == os.PathSeparator {
 		blobName = blobName[1:]
 	}
 

@@ -35,6 +35,9 @@ type SimpleContainer struct {
 
 	// have we attempted to populate this container?
 	Populated bool
+
+	// is Root container.
+	IsRootContainer bool
 }
 
 // NewSimpleContainer factory time!

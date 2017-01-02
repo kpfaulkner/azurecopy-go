@@ -133,11 +133,32 @@ func (ac *AzureCopy) CreateContainer(containerName string) error {
 	return nil
 }
 
+// CopyBlobByURLUsingCopyBlob copy a blob from one URL to another using Azure CopyBlob functionality.
+// This only works if the destination is Azure.
+func (ac *AzureCopy) CopyBlobByURLUsingCopyBlob(replaceExisting bool) error {
+
+	/*
+		var err error
+
+		// need to make this cloud/fs agnostic!
+		if misc.GetLastChar(ac.sourceURL) == "/" || misc.GetLastChar(ac.sourceURL) == "\\" {
+			// copying a directory/vdir worth of stuff....
+			err = ac.CopyContainerByURLUsingCopyBlob(ac.sourceURL, ac.destURL, replaceExisting)
+		} else {
+			err = ac.CopySingleBlobByURL(ac.sourceURL, ac.destURL, replaceExisting)
+		}
+
+		if err != nil {
+			log.Fatal("CopyBlobByUrl error ", err)
+		} */
+	return nil
+}
+
 // CopyBlobByURL copy a blob from one URL to another.
 func (ac *AzureCopy) CopyBlobByURL(replaceExisting bool) error {
 
 	var err error
-	if misc.GetLastChar(ac.sourceURL) == "/" {
+	if misc.GetLastChar(ac.sourceURL) == "/" || misc.GetLastChar(ac.sourceURL) == "\\" {
 		// copying a directory/vdir worth of stuff....
 		err = ac.CopyContainerByURL(ac.sourceURL, ac.destURL, replaceExisting)
 	} else {
@@ -183,6 +204,9 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replac
 	if err != nil {
 		log.Fatal("CopyContainerByURL failed dest ", err)
 	}
+
+	log.Debug("about to get over channel")
+	deepestDestinationContainer.DisplayContainer("")
 
 	// make channel
 	readChannel := make(chan models.SimpleContainer, 1000)

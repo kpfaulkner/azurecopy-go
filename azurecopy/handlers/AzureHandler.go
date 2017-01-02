@@ -63,13 +63,14 @@ func NewAzureHandler(accountName string, accountKey string, isSource bool, cache
 // that has the containerSlice populated with the real Azure containers.
 func (ah *AzureHandler) GetRootContainer() models.SimpleContainer {
 
-	log.Debugf("GetRootContainer")
+	log.Debugf("Azurehandler::GetRootContainer")
 
 	params := storage.ListContainersParameters{}
 	containerResponse, err := ah.blobStorageClient.ListContainers(params)
 
 	if err != nil {
 		// NFI.
+		log.Debugf("AzureHandler::GetRootContainer error %s", err)
 	}
 
 	rootContainer := models.NewSimpleContainer()
@@ -82,6 +83,7 @@ func (ah *AzureHandler) GetRootContainer() models.SimpleContainer {
 		rootContainer.ContainerSlice = append(rootContainer.ContainerSlice, sc)
 	}
 
+	log.Debugf("returning root container %s", *rootContainer)
 	return *rootContainer
 }
 
@@ -104,7 +106,7 @@ func (ah *AzureHandler) BlobExists(container models.SimpleContainer, blobName st
 // returned is vdir.
 func (ah *AzureHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleContainer, error) {
 
-	log.Debugf("GetSpecificSimpleContainer %s", URL)
+	log.Debugf("AzureHandler::GetSpecificSimpleContainer %s", URL)
 	lastChar := URL[len(URL)-1:]
 	// MUST be a better way to get the last character.
 	if lastChar != "/" {
@@ -119,6 +121,7 @@ func (ah *AzureHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleCo
 	container, err := ah.getAzureContainer(containerName)
 	if err != nil {
 
+		log.Debugf("container %s didn't exist, trying to create it: %s", containerName, err)
 		// cant get container, create it.
 		err = ah.blobStorageClient.CreateContainer(containerName, storage.ContainerAccessTypeBlob)
 		if err != nil {

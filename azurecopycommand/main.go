@@ -16,6 +16,7 @@ const (
 	CommandCreateContainer
 	CommandUnknown
 	CommandListContainer
+	CommandCopyBlob
 )
 
 /*
@@ -105,7 +106,7 @@ func printContainer(container *models.SimpleContainer, depth int) {
 
 // getCommand. Naive way to determine what the actual user wants to do. Copy, list etc etc.
 // rework when it gets more complex.
-func getCommand(copyCommand bool, listCommand bool, createContainerCommand string) int {
+func getCommand(copyCommand bool, listCommand bool, createContainerCommand string, copyBlobCommand bool) int {
 
 	if !copyCommand && !listCommand && createContainerCommand == "" {
 		log.Fatal("No command given")
@@ -113,6 +114,10 @@ func getCommand(copyCommand bool, listCommand bool, createContainerCommand strin
 
 	if copyCommand {
 		return CommandCopy
+	}
+
+	if copyBlobCommand {
+		return CommandCopyBlob
 	}
 
 	if listCommand {
@@ -135,6 +140,9 @@ func setupConfiguration() *misc.CloudConfig {
 	var dest = flag.String("dest", "", "Destination URL")
 	var debug = flag.Bool("debug", false, "Debug output")
 	var copyCommand = flag.Bool("copy", false, "Copy from source to destination")
+	// not implemented yetvar copyBlobCommand = flag.Bool("copyblob", false, "Copy from source to destination using Azure CopyBlob flag. Can only be used if Azure is destination")
+	copyBlobCommand := false
+
 	var listCommand = flag.Bool("list", false, "List contents from source")
 	var createContainerCommand = flag.String("createcontainer", "", "Create container for destination")
 
@@ -159,7 +167,7 @@ func setupConfiguration() *misc.CloudConfig {
 
 	flag.Parse()
 
-	config.Command = getCommand(*copyCommand, *listCommand, *createContainerCommand)
+	config.Command = getCommand(*copyCommand, *listCommand, *createContainerCommand, copyBlobCommand)
 
 	config.Configuration[misc.Source] = *source
 	config.Configuration[misc.Dest] = *dest
@@ -203,6 +211,13 @@ func main() {
 	switch config.Command {
 	case CommandCopy:
 		err := ac.CopyBlobByURL(config.Replace)
+		if err != nil {
+			log.Fatal(err)
+		}
+		break
+
+	case CommandCopyBlob:
+		err := ac.CopyBlobByURLUsingCopyBlob(config.Replace)
 		if err != nil {
 			log.Fatal(err)
 		}

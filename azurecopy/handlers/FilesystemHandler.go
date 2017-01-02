@@ -85,6 +85,7 @@ func (fh *FilesystemHandler) GetRootContainer() models.SimpleContainer {
 	rootContainer.URL = fh.rootContainerPath
 	rootContainer.Origin = models.Filesystem
 	rootContainer.Name = fh.container
+	rootContainer.IsRootContainer = true
 
 	for _, f := range fileInfos {
 
@@ -273,6 +274,7 @@ func (fh *FilesystemHandler) generateFullPath(container *models.SimpleContainer)
 	}
 
 	fullPath := fh.basePath + path + string(os.PathSeparator)
+	// if full path is rootContainerPath then we need to actually generate
 	log.Debugf("Generated full path of %s", fullPath)
 	return fullPath
 }
@@ -303,7 +305,7 @@ func (fh *FilesystemHandler) GetContainerContents(container *models.SimpleContai
 			sc.Origin = models.Filesystem
 			sc.ParentContainer = container
 			sc.Populated = false
-
+			sc.IsRootContainer = false
 			fh.GetContainerContents(sc)
 			container.ContainerSlice = append(container.ContainerSlice, sc)
 
@@ -396,6 +398,7 @@ func (fh *FilesystemHandler) GetSpecificSimpleContainer(URL string) (*models.Sim
 	rootContainer.URL = URL
 	rootContainer.Origin = models.Filesystem
 	rootContainer.Name = container
+	rootContainer.IsRootContainer = true
 
 	/*
 		for _, f := range fileInfos {

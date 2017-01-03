@@ -7,6 +7,8 @@ import (
 	"flag"
 	"fmt"
 
+	"os"
+
 	log "github.com/Sirupsen/logrus"
 )
 
@@ -112,7 +114,8 @@ func printContainer(container *models.SimpleContainer, depth int) {
 func getCommand(copyCommand bool, listCommand bool, createContainerCommand string, copyBlobCommand bool) int {
 
 	if !copyCommand && !listCommand && createContainerCommand == "" {
-		log.Fatal("No command given")
+		fmt.Println("No command given")
+		os.Exit(1)
 	}
 
 	if copyCommand {

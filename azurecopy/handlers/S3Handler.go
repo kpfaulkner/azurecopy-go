@@ -6,6 +6,7 @@ import (
 	"azurecopy/azurecopy/utils/misc"
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -137,8 +138,10 @@ func (sh *S3Handler) populateSimpleContainer(s3Objects []*s3.Object, container *
 			b.Name = sp[len(sp)-1]
 			b.Origin = container.Origin
 			b.ParentContainer = container
+
+			log.Debugf("container for copy %s", container)
 			b.BlobCloudName = *blob.Key // cloud specific name... ie the REAL name.
-			b.URL = ""                  // NFI ah.blobStorageClient.GetBlobURL(container.Name, blob.Name)
+			b.URL = generateS3URL(*blob.Key, container.Name)
 			currentContainer.BlobSlice = append(currentContainer.BlobSlice, &b)
 			currentContainer.Populated = true
 			log.Debugf("just added blob %s to container", b.Name, currentContainer.Name)
@@ -146,6 +149,11 @@ func (sh *S3Handler) populateSimpleContainer(s3Objects []*s3.Object, container *
 		}
 	}
 	container.Populated = true
+}
+
+// need a more solid way to generate this.
+func generateS3URL(key string, containerName string) string {
+	return fmt.Sprintf("https://%s.s3.amazonaws.com/%s", containerName, key)
 }
 
 // getSubContainer gets an existing subcontainer with parent of container and name of segment.

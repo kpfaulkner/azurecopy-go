@@ -5,6 +5,7 @@ import (
 	"azurecopy/azurecopy/models"
 	"azurecopy/azurecopy/utils/misc"
 	"flag"
+	"fmt"
 
 	log "github.com/Sirupsen/logrus"
 )
@@ -18,6 +19,8 @@ const (
 	CommandListContainer
 	CommandCopyBlob
 )
+
+var Version string
 
 /*
 func FSToAzure() {
@@ -136,6 +139,7 @@ func getCommand(copyCommand bool, listCommand bool, createContainerCommand strin
 func setupConfiguration() *misc.CloudConfig {
 	config := misc.NewCloudConfig()
 
+	var version = flag.Bool("version", false, "Display Version")
 	var source = flag.String("source", "", "Source URL")
 	var dest = flag.String("dest", "", "Destination URL")
 	var debug = flag.Bool("debug", false, "Debug output")
@@ -167,30 +171,33 @@ func setupConfiguration() *misc.CloudConfig {
 
 	flag.Parse()
 
-	config.Command = getCommand(*copyCommand, *listCommand, *createContainerCommand, copyBlobCommand)
-
-	config.Configuration[misc.Source] = *source
-	config.Configuration[misc.Dest] = *dest
+	config.Version = *version
 	config.Debug = *debug
-	config.Replace = *replace
-	config.Configuration[misc.CreateContainerName] = *createContainerCommand
+	if !*version {
+		config.Command = getCommand(*copyCommand, *listCommand, *createContainerCommand, copyBlobCommand)
 
-	config.Configuration[misc.AzureDefaultAccountName] = *azureDefaultAccountName
-	config.Configuration[misc.AzureDefaultAccountKey] = *azureDefaultAccountKey
-	config.Configuration[misc.AzureSourceAccountName] = *azureSourceAccountName
-	config.Configuration[misc.AzureSourceAccountKey] = *azureSourceAccountKey
-	config.Configuration[misc.AzureDestAccountName] = *azureDestAccountName
-	config.Configuration[misc.AzureDestAccountKey] = *azureDestAccountKey
+		config.Configuration[misc.Source] = *source
+		config.Configuration[misc.Dest] = *dest
+		config.Replace = *replace
+		config.Configuration[misc.CreateContainerName] = *createContainerCommand
 
-	config.Configuration[misc.S3DefaultAccessID] = *s3DefaultAccessID
-	config.Configuration[misc.S3DefaultAccessSecret] = *s3DefaultAccessSecret
-	config.Configuration[misc.S3DefaultRegion] = *s3DefaultRegion
-	config.Configuration[misc.S3SourceAccessID] = *s3SourceAccessID
-	config.Configuration[misc.S3SourceAccessSecret] = *s3SourceAccessSecret
-	config.Configuration[misc.S3SourceRegion] = *s3SourceRegion
-	config.Configuration[misc.S3DestAccessID] = *s3DestAccessID
-	config.Configuration[misc.S3DestAccessSecret] = *s3DestAccessSecret
-	config.Configuration[misc.S3DestRegion] = *s3DestRegion
+		config.Configuration[misc.AzureDefaultAccountName] = *azureDefaultAccountName
+		config.Configuration[misc.AzureDefaultAccountKey] = *azureDefaultAccountKey
+		config.Configuration[misc.AzureSourceAccountName] = *azureSourceAccountName
+		config.Configuration[misc.AzureSourceAccountKey] = *azureSourceAccountKey
+		config.Configuration[misc.AzureDestAccountName] = *azureDestAccountName
+		config.Configuration[misc.AzureDestAccountKey] = *azureDestAccountKey
+
+		config.Configuration[misc.S3DefaultAccessID] = *s3DefaultAccessID
+		config.Configuration[misc.S3DefaultAccessSecret] = *s3DefaultAccessSecret
+		config.Configuration[misc.S3DefaultRegion] = *s3DefaultRegion
+		config.Configuration[misc.S3SourceAccessID] = *s3SourceAccessID
+		config.Configuration[misc.S3SourceAccessSecret] = *s3SourceAccessSecret
+		config.Configuration[misc.S3SourceRegion] = *s3SourceRegion
+		config.Configuration[misc.S3DestAccessID] = *s3DestAccessID
+		config.Configuration[misc.S3DestAccessSecret] = *s3DestAccessSecret
+		config.Configuration[misc.S3DestRegion] = *s3DestRegion
+	}
 
 	return config
 }
@@ -204,6 +211,13 @@ func main() {
 		log.SetLevel(log.InfoLevel)
 	} else {
 		log.SetLevel(log.DebugLevel)
+	}
+	log.Debug("after config setup")
+
+	// if display version, then display then exit
+	if config.Version {
+		fmt.Println("Version: " + Version)
+		return
 	}
 
 	ac := azurecopy.NewAzureCopy(*config)

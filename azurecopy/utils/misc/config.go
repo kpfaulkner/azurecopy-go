@@ -45,6 +45,8 @@ type CloudConfig struct {
 	Command int // command we're executing
 
 	Replace bool // will replace at destination
+
+	Version bool // display version
 }
 
 // NewCloudConfig  Make new (and only really) configuration map

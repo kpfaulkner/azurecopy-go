@@ -47,6 +47,8 @@ type CloudConfig struct {
 	Replace bool // will replace at destination
 
 	Version bool // display version
+
+	ConcurrentCount uint // how many goroutines do we have in the pool?
 }
 
 // NewCloudConfig  Make new (and only really) configuration map

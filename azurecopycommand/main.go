@@ -142,13 +142,14 @@ func getCommand(copyCommand bool, listCommand bool, createContainerCommand strin
 func setupConfiguration() *misc.CloudConfig {
 	config := misc.NewCloudConfig()
 
+	var concurrentCount = flag.Uint("cc", 5, "Concurrent Count. How many blobs are copied concurrently")
+
 	var version = flag.Bool("version", false, "Display Version")
 	var source = flag.String("source", "", "Source URL")
 	var dest = flag.String("dest", "", "Destination URL")
 	var debug = flag.Bool("debug", false, "Debug output")
 	var copyCommand = flag.Bool("copy", false, "Copy from source to destination")
-	// not implemented yetvar copyBlobCommand = flag.Bool("copyblob", false, "Copy from source to destination using Azure CopyBlob flag. Can only be used if Azure is destination")
-	copyBlobCommand := false
+	var copyBlobCommand = flag.Bool("copyblob", false, "Copy from source to destination using Azure CopyBlob flag. Can only be used if Azure is destination")
 
 	var listCommand = flag.Bool("list", false, "List contents from source")
 	var createContainerCommand = flag.String("createcontainer", "", "Create container for destination")
@@ -177,11 +178,19 @@ func setupConfiguration() *misc.CloudConfig {
 	config.Version = *version
 	config.Debug = *debug
 	if !*version {
-		config.Command = getCommand(*copyCommand, *listCommand, *createContainerCommand, copyBlobCommand)
+
+		// seems toooooo manual. Figure out something nicer later.
+		if *concurrentCount > 1000 {
+			fmt.Printf("Maximum number for concurrent count is 1000")
+			os.Exit(1)
+		}
+
+		config.Command = getCommand(*copyCommand, *listCommand, *createContainerCommand, *copyBlobCommand)
 
 		config.Configuration[misc.Source] = *source
 		config.Configuration[misc.Dest] = *dest
 		config.Replace = *replace
+		config.ConcurrentCount = *concurrentCount
 		config.Configuration[misc.CreateContainerName] = *createContainerCommand
 
 		config.Configuration[misc.AzureDefaultAccountName] = *azureDefaultAccountName

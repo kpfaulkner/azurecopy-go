@@ -5,6 +5,8 @@ import (
 	"azurecopy/azurecopy/models"
 	"azurecopy/azurecopy/utils"
 	"azurecopy/azurecopy/utils/misc"
+	"fmt"
+	"os"
 	"regexp"
 	"strings"
 
@@ -137,20 +139,25 @@ func (ac *AzureCopy) CreateContainer(containerName string) error {
 // This only works if the destination is Azure.
 func (ac *AzureCopy) CopyBlobByURLUsingCopyBlob(replaceExisting bool) error {
 
-	/*
-		var err error
+	// check destination is Azure. If not, kaboom!
+	if ac.destCloudType != models.Azure {
+		fmt.Printf("Can only use CopyBlob flag when destination is Azure Blob Storage")
+		os.Exit(1)
+	}
 
-		// need to make this cloud/fs agnostic!
-		if misc.GetLastChar(ac.sourceURL) == "/" || misc.GetLastChar(ac.sourceURL) == "\\" {
-			// copying a directory/vdir worth of stuff....
-			err = ac.CopyContainerByURLUsingCopyBlob(ac.sourceURL, ac.destURL, replaceExisting)
-		} else {
-			err = ac.CopySingleBlobByURL(ac.sourceURL, ac.destURL, replaceExisting)
-		}
+	var err error
 
-		if err != nil {
-			log.Fatal("CopyBlobByUrl error ", err)
-		} */
+	// need to make this cloud/fs agnostic!
+	if misc.GetLastChar(ac.sourceURL) == "/" || misc.GetLastChar(ac.sourceURL) == "\\" {
+		// copying a directory/vdir worth of stuff....
+		err = ac.CopyContainerByURLUsingCopyBlob(ac.sourceURL, ac.destURL, replaceExisting)
+	} else {
+		err = ac.CopySingleBlobByURL(ac.sourceURL, ac.destURL, replaceExisting)
+	}
+
+	if err != nil {
+		log.Fatal("CopyBlobByUrl error ", err)
+	}
 	return nil
 }
 
@@ -192,6 +199,64 @@ func (ac *AzureCopy) CopySingleBlobByURL(sourceURL string, destURL string, repla
 // So will use GoRoutines to concurrently retrieve list of blobs and another for writing to destination.
 // First real attempt using GoRoutines for something "real" so will see how it goes.
 func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replaceExisting bool) error {
+
+	log.Infof("copy from %s to %s", sourceURL, destURL)
+
+	deepestContainer, err := ac.sourceHandler.GetSpecificSimpleContainer(sourceURL)
+	if err != nil {
+		log.Fatal("CopyContainerByURL failed source ", err)
+	}
+
+	deepestDestinationContainer, err := ac.destHandler.GetSpecificSimpleContainer(destURL)
+	if err != nil {
+		log.Fatal("CopyContainerByURL failed dest ", err)
+	}
+
+	log.Debug("about to get over channel")
+	deepestDestinationContainer.DisplayContainer("")
+
+	// make channel
+	readChannel := make(chan models.SimpleContainer, 1000)
+
+	// get container contents over channel.
+	// get the blobs for the deepest vdir which is part of the URL.
+	go ac.sourceHandler.GetContainerContentsOverChannel(*deepestContainer, readChannel)
+	if err != nil {
+		log.Fatalf("CopyContainerByURL err %s", err)
+	}
+
+	log.Debug("about to loop")
+
+	for {
+		// get data read.
+		containerDetails, ok := <-readChannel
+		if !ok {
+			log.Debug("breaking, read channel closed")
+
+			// channel closed. We're done now.
+			break
+		}
+
+		log.Debugf("containerDetails reading from channel")
+		containerDetails.DisplayContainer("")
+
+		// copy it.
+		// recursive...  dangerous...
+		wg.Add(1)
+		go ac.copyAllBlobsInContainer(&containerDetails, deepestDestinationContainer, "", replaceExisting)
+	}
+
+	wg.Wait()
+
+	log.Debug("after wait")
+	return nil
+}
+
+// CopyContainerByURLUsingCopyBlob copies blobs/containers from a URL to a destination Azure URL
+// using the CopyBlob functionality within Azure.
+// This means that the local bandwidth is not required and the files get copied directly from
+// the source to Azure.
+func (ac *AzureCopy) CopyContainerByURLUsingCopyBlob(sourceURL string, destURL string, replaceExisting bool) error {
 
 	log.Infof("copy from %s to %s", sourceURL, destURL)
 

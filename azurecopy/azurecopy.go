@@ -137,24 +137,26 @@ func (ac *AzureCopy) CreateContainer(containerName string) error {
 // This only works if the destination is Azure.
 func (ac *AzureCopy) CopyBlobByURLUsingCopyBlob(replaceExisting bool) error {
 
-	// check destination is Azure. If not, kaboom!
-	if ac.destCloudType != models.Azure {
+	/*
+		// check destination is Azure. If not, kaboom!
+		if ac.destCloudType != models.Azure {
 
-	}
+		}
 
-	var err error
+		var err error
 
-	// need to make this cloud/fs agnostic!
-	if misc.GetLastChar(ac.sourceURL) == "/" || misc.GetLastChar(ac.sourceURL) == "\\" {
-		// copying a directory/vdir worth of stuff....
-		err = ac.CopyContainerByURLUsingCopyBlob(ac.sourceURL, ac.destURL, replaceExisting)
-	} else {
-		err = ac.CopySingleBlobByURL(ac.sourceURL, ac.destURL, replaceExisting)
-	}
+		// need to make this cloud/fs agnostic!
+		if misc.GetLastChar(ac.sourceURL) == "/" || misc.GetLastChar(ac.sourceURL) == "\\" {
+			// copying a directory/vdir worth of stuff....
+			err = ac.CopyContainerByURLUsingCopyBlob(ac.sourceURL, ac.destURL, replaceExisting)
+		} else {
+			err = ac.CopySingleBlobByURL(ac.sourceURL, ac.destURL, replaceExisting)
+		}
 
-	if err != nil {
-		log.Fatal("CopyBlobByUrl error ", err)
-	}
+		if err != nil {
+			log.Fatal("CopyBlobByUrl error ", err)
+		}
+	*/
 	return nil
 }
 
@@ -239,7 +241,7 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replac
 		}
 
 		// populate the copyChannel with individual blobs.
-		ac.populateCopyChannel(deepestContainer, prefix, copyChannel)
+		ac.populateCopyChannel(&containerDetails, "", copyChannel)
 	}
 
 	// wait for all copying to be done.
@@ -257,6 +259,7 @@ func (ac *AzureCopy) launchCopyGoRoutines(destContainer *models.SimpleContainer,
 	}
 }
 
+/*
 // copyAllBlobsInContainer recursively copies all blobs (in sub containers) to the destination.
 // Have wrapper function to implementCopyAllBlobsInContainer since we have recursive calls and cant have recursive wg.Done's
 func (ac *AzureCopy) copyAllBlobsInContainer(sourceContainer *models.SimpleContainer, destContainer *models.SimpleContainer, prefix string, replaceExisting bool) error {
@@ -271,6 +274,7 @@ func (ac *AzureCopy) copyAllBlobsInContainer(sourceContainer *models.SimpleConta
 	ac.implementCopyAllBlobsInContainer(sourceContainer, prefix, copyChannel)
 
 }
+*/
 
 // populateCopyChannel copies blobs into channel for later copying.
 func (ac *AzureCopy) populateCopyChannel(sourceContainer *models.SimpleContainer, prefix string, copyChannel chan models.SimpleBlob) error {
@@ -282,7 +286,7 @@ func (ac *AzureCopy) populateCopyChannel(sourceContainer *models.SimpleContainer
 			blob.DestName = prefix + "/" + blob.Name
 		}
 
-		copyChannel <- blob
+		copyChannel <- *blob
 	}
 
 	// call for each sub container.
@@ -317,12 +321,12 @@ func (ac *AzureCopy) copyBlobFromChannel(destContainer *models.SimpleContainer, 
 			return
 		}
 
-		ac.ReadBlob(blob)
+		ac.ReadBlob(&blob)
 
 		// rename name for destination. HACK!
 		blob.Name = blob.DestName
 
-		ac.WriteBlob(destContainer, blob)
+		ac.WriteBlob(destContainer, &blob)
 	}
 
 }

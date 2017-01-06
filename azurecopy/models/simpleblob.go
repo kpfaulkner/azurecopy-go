@@ -21,6 +21,9 @@ type SimpleBlob struct {
 	Name string
 	URL  string
 
+	// destination blob name
+	DestName string
+
 	// REAL platform (Azure, S3 etc) name of blob.
 	// ie including the nasty vdirs etc.
 	BlobCloudName string

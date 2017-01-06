@@ -5,8 +5,6 @@ import (
 	"azurecopy/azurecopy/models"
 	"azurecopy/azurecopy/utils"
 	"azurecopy/azurecopy/utils/misc"
-	"fmt"
-	"os"
 	"regexp"
 	"strings"
 
@@ -140,11 +138,7 @@ func (ac *AzureCopy) CreateContainer(containerName string) error {
 func (ac *AzureCopy) CopyBlobByURLUsingCopyBlob(replaceExisting bool) error {
 
 	// check destination is Azure. If not, kaboom!
-	if ac.destCloudType != models.Azure {
-		fmt.Printf("Can only use CopyBlob flag when destination is Azure Blob Storage")
-		os.Exit(1)
-	}
-
+	if ac.destCloudType != misc.
 	var err error
 
 	// need to make this cloud/fs agnostic!
@@ -252,72 +246,53 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replac
 	return nil
 }
 
-// CopyContainerByURLUsingCopyBlob copies blobs/containers from a URL to a destination Azure URL
-// using the CopyBlob functionality within Azure.
-// This means that the local bandwidth is not required and the files get copied directly from
-// the source to Azure.
-func (ac *AzureCopy) CopyContainerByURLUsingCopyBlob(sourceURL string, destURL string, replaceExisting bool) error {
-
-	log.Infof("copy from %s to %s", sourceURL, destURL)
-
-	deepestContainer, err := ac.sourceHandler.GetSpecificSimpleContainer(sourceURL)
-	if err != nil {
-		log.Fatal("CopyContainerByURL failed source ", err)
-	}
-
-	deepestDestinationContainer, err := ac.destHandler.GetSpecificSimpleContainer(destURL)
-	if err != nil {
-		log.Fatal("CopyContainerByURL failed dest ", err)
-	}
-
-	log.Debug("about to get over channel")
-	deepestDestinationContainer.DisplayContainer("")
-
-	// make channel
-	readChannel := make(chan models.SimpleContainer, 1000)
-
-	// get container contents over channel.
-	// get the blobs for the deepest vdir which is part of the URL.
-	go ac.sourceHandler.GetContainerContentsOverChannel(*deepestContainer, readChannel)
-	if err != nil {
-		log.Fatalf("CopyContainerByURL err %s", err)
-	}
-
-	log.Debug("about to loop")
-
-	for {
-		// get data read.
-		containerDetails, ok := <-readChannel
-		if !ok {
-			log.Debug("breaking, read channel closed")
-
-			// channel closed. We're done now.
-			break
-		}
-
-		log.Debugf("containerDetails reading from channel")
-		containerDetails.DisplayContainer("")
-
-		// copy it.
-		// recursive...  dangerous...
-		wg.Add(1)
-		go ac.copyAllBlobsInContainer(&containerDetails, deepestDestinationContainer, "", replaceExisting)
-	}
-
-	wg.Wait()
-
-	log.Debug("after wait")
-	return nil
-}
-
 // copyAllBlobsInContainer recursively copies all blobs (in sub containers) to the destination.
 // Have wrapper function to implementCopyAllBlobsInContainer since we have recursive calls and cant have recursive wg.Done's
 func (ac *AzureCopy) copyAllBlobsInContainer(sourceContainer *models.SimpleContainer, destContainer *models.SimpleContainer, prefix string, replaceExisting bool) error {
 
 	log.Debug("copyAllBlobsInContainer start")
 	defer wg.Done()
-	return ac.implementCopyAllBlobsInContainer(sourceContainer, destContainer, prefix, replaceExisting)
 
+	// take entries in container and put them in a channel for copying.
+	copyChannel := make(chan models.SimpleBlob, 1000)
+
+	// populate.
+	ac.populateCopyChannel(sourceContainer, prefix,  copyChannel)
+
+	// copy!!
+	ac.implementCopyAllBlobsInContainer(sourceContainer, prefix,  copyChannel)
+
+}
+
+// populateCopyChannel copies blobs into channel for later copying.
+func (ac *AzureCopy) populateCopyChannel(sourceContainer *models.SimpleContainer, prefix string, copyChannel chan models.SimpleBlob) error {
+
+	// copy all blobs
+	for _, blob := range sourceContainer.BlobSlice {
+
+		if prefix != "" {
+			blob.DestName = prefix + "/" + blob.Name
+		}
+
+		copyChannel <- blob
+	}
+
+	// call for each sub container.
+	for _, container := range sourceContainer.ContainerSlice {
+		var newPrefix string
+		if prefix != "" {
+			newPrefix = prefix + "/" + container.Name
+		} else {
+			newPrefix = container.Name
+		}
+
+		err := ac.implementCopyAllBlobsInContainer(container, destContainer, newPrefix, replaceExisting, copyChannel)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	return nil
 }
 
 // implementCopyAllBlobsInContainer recursively copies all blobs (in sub containers) to the destination.

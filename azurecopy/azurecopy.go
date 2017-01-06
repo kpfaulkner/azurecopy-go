@@ -138,7 +138,10 @@ func (ac *AzureCopy) CreateContainer(containerName string) error {
 func (ac *AzureCopy) CopyBlobByURLUsingCopyBlob(replaceExisting bool) error {
 
 	// check destination is Azure. If not, kaboom!
-	if ac.destCloudType != misc.
+	if ac.destCloudType != models.Azure {
+
+	}
+
 	var err error
 
 	// need to make this cloud/fs agnostic!
@@ -209,8 +212,14 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replac
 	log.Debug("about to get over channel")
 	deepestDestinationContainer.DisplayContainer("")
 
-	// make channel
+	// make channel for reading from cloud.
 	readChannel := make(chan models.SimpleContainer, 1000)
+
+	// channel for individual blobs (not containers) which will be read and copied.
+	copyChannel := make(chan models.SimpleBlob, 1000)
+
+	// launch go routines for copying.
+	ac.launchCopyGoRoutines(deepestDestinationContainer, replaceExisting, copyChannel)
 
 	// get container contents over channel.
 	// get the blobs for the deepest vdir which is part of the URL.
@@ -218,8 +227,6 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replac
 	if err != nil {
 		log.Fatalf("CopyContainerByURL err %s", err)
 	}
-
-	log.Debug("about to loop")
 
 	for {
 		// get data read.
@@ -231,19 +238,23 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replac
 			break
 		}
 
-		log.Debugf("containerDetails reading from channel")
-		containerDetails.DisplayContainer("")
-
-		// copy it.
-		// recursive...  dangerous...
-		wg.Add(1)
-		go ac.copyAllBlobsInContainer(&containerDetails, deepestDestinationContainer, "", replaceExisting)
+		// populate the copyChannel with individual blobs.
+		ac.populateCopyChannel(deepestContainer, prefix, copyChannel)
 	}
 
+	// wait for all copying to be done.
 	wg.Wait()
-
 	log.Debug("after wait")
 	return nil
+}
+
+// launchCopyGoRoutines starts a number of Go Routines used for copying contents.
+func (ac *AzureCopy) launchCopyGoRoutines(destContainer *models.SimpleContainer, replaceExisting bool, copyChannel chan models.SimpleBlob) {
+
+	for i := 0; i < int(ac.config.ConcurrentCount); i++ {
+		wg.Add(1)
+		go ac.copyBlobFromChannel(destContainer, replaceExisting, copyChannel)
+	}
 }
 
 // copyAllBlobsInContainer recursively copies all blobs (in sub containers) to the destination.
@@ -256,11 +267,8 @@ func (ac *AzureCopy) copyAllBlobsInContainer(sourceContainer *models.SimpleConta
 	// take entries in container and put them in a channel for copying.
 	copyChannel := make(chan models.SimpleBlob, 1000)
 
-	// populate.
-	ac.populateCopyChannel(sourceContainer, prefix,  copyChannel)
-
 	// copy!!
-	ac.implementCopyAllBlobsInContainer(sourceContainer, prefix,  copyChannel)
+	ac.implementCopyAllBlobsInContainer(sourceContainer, prefix, copyChannel)
 
 }
 
@@ -286,7 +294,7 @@ func (ac *AzureCopy) populateCopyChannel(sourceContainer *models.SimpleContainer
 			newPrefix = container.Name
 		}
 
-		err := ac.implementCopyAllBlobsInContainer(container, destContainer, newPrefix, replaceExisting, copyChannel)
+		err := ac.populateCopyChannel(container, newPrefix, copyChannel)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -295,59 +303,28 @@ func (ac *AzureCopy) populateCopyChannel(sourceContainer *models.SimpleContainer
 	return nil
 }
 
-// implementCopyAllBlobsInContainer recursively copies all blobs (in sub containers) to the destination.
-func (ac *AzureCopy) implementCopyAllBlobsInContainer(sourceContainer *models.SimpleContainer, destContainer *models.SimpleContainer, prefix string, replaceExisting bool) error {
+// copyBlobFromChannel reads blob from channel and copies it to destinationContainer
+func (ac *AzureCopy) copyBlobFromChannel(destContainer *models.SimpleContainer, replaceExisting bool, copyChannel chan models.SimpleBlob) {
 
-	log.Debug("implementCopyAllBlobsInContainer start")
+	log.Debug("copyBlobFromChannel start")
 
-	// copy all blobs
-	for _, blob := range sourceContainer.BlobSlice {
+	defer wg.Done()
 
-		log.Debugf("blob is %s", blob)
-
-		// check if blob exists if we're not replacing
-		if !replaceExisting {
-			exists, err := ac.doesDestinationBlobExist(destContainer, blob)
-			if err != nil {
-				log.Fatalf("Error", err)
-			}
-
-			// exists and we dont want to replace
-			if exists {
-				continue
-			}
+	for {
+		blob, ok := <-copyChannel
+		if !ok {
+			// closed...   so all writing is done?  Or what?
+			return
 		}
 
 		ac.ReadBlob(blob)
-		origName := blob.Name
 
-		if prefix != "" {
-			blob.Name = prefix + "/" + blob.Name
-		}
+		// rename name for destination. HACK!
+		blob.Name = blob.DestName
 
-		log.Debugf("Read %s and writing as %s", origName, blob.Name)
-
-		// modify blob name?
-		// hacky? Options? TODO(kpfaulkner)
 		ac.WriteBlob(destContainer, blob)
 	}
 
-	// call for each sub container.
-	for _, container := range sourceContainer.ContainerSlice {
-		var newPrefix string
-		if prefix != "" {
-			newPrefix = prefix + "/" + container.Name
-		} else {
-			newPrefix = container.Name
-		}
-
-		err := ac.implementCopyAllBlobsInContainer(container, destContainer, newPrefix, replaceExisting)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-
-	return nil
 }
 
 // GetHandlerForURL returns the appropriate handler for a given cloud type.

@@ -63,7 +63,6 @@ func NewAzureHandler(accountName string, accountKey string, isSource bool, cache
 // that has the containerSlice populated with the real Azure containers.
 func (ah *AzureHandler) GetRootContainer() models.SimpleContainer {
 
-	ah.blobStorageClient.CopyBlob
 	log.Debugf("Azurehandler::GetRootContainer")
 
 	params := storage.ListContainersParameters{}
@@ -226,7 +225,6 @@ func (ah *AzureHandler) generateSubContainers(azureContainer *models.SimpleConta
 
 func (ah *AzureHandler) getAzureContainer(containerName string) (*models.SimpleContainer, error) {
 
-	
 	log.Debugf("getAzureContainer %s", containerName)
 	rootContainer := ah.GetRootContainer()
 

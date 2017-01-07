@@ -457,7 +457,7 @@ func (sh *S3Handler) WriteContainer(sourceContainer *models.SimpleContainer, des
 // and if the blobName is "myblob" then the REAL underlying Azure structure would be container == "myrealcontainer"
 // and the blob name is vdir/vdir2/myblob
 func (sh *S3Handler) WriteBlob(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
-	log.Debugf("S3Handler::WriteBlob")
+	log.Debugf("S3Handler::WriteBlob %s", sourceBlob.Name)
 
 	var err error
 	if sh.cacheToDisk {
@@ -487,6 +487,7 @@ func (sh *S3Handler) getContainerAndBlobNames(destContainer *models.SimpleContai
 		blobName = sourceBlobName
 	}
 
+	log.Debugf("S3 container %s, blob %s", containerName, blobName)
 	return containerName, blobName
 }
 
@@ -498,6 +499,8 @@ func (sh *S3Handler) writeBlobFromCache(destContainer *models.SimpleContainer, s
 	// file stream for cache.
 	var cacheFile *os.File
 
+	log.Debugf("S3:writeBlobFromCache blobname %s", blobName)
+
 	// need to get cache dir from somewhere!
 	cacheFile, err := os.OpenFile(sourceBlob.DataCachedAtPath, os.O_RDONLY, 0)
 	if err != nil {
@@ -505,11 +508,16 @@ func (sh *S3Handler) writeBlobFromCache(destContainer *models.SimpleContainer, s
 		return err
 	}
 
+	log.Debugf("before param %s", blobName)
+
 	params := &s3.PutObjectInput{
 		Bucket: aws.String(containerName),
 		Key:    aws.String(blobName),
 		Body:   cacheFile,
 	}
+	log.Debugf("after param %s", blobName)
+
+	log.Debugf("before putobject %s", params)
 	_, err = sh.s3Client.PutObject(params)
 	if err != nil {
 		log.Errorf("Unable to upload %s", blobName)

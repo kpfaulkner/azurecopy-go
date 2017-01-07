@@ -244,6 +244,9 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replac
 		ac.populateCopyChannel(&containerDetails, "", copyChannel)
 	}
 
+	// finished copying contents to channel. Close now?
+	close(copyChannel)
+
 	// wait for all copying to be done.
 	wg.Wait()
 	log.Debug("after wait")
@@ -253,28 +256,12 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replac
 // launchCopyGoRoutines starts a number of Go Routines used for copying contents.
 func (ac *AzureCopy) launchCopyGoRoutines(destContainer *models.SimpleContainer, replaceExisting bool, copyChannel chan models.SimpleBlob) {
 
+	log.Debugf("launching %d goroutines", ac.config.ConcurrentCount)
 	for i := 0; i < int(ac.config.ConcurrentCount); i++ {
 		wg.Add(1)
 		go ac.copyBlobFromChannel(destContainer, replaceExisting, copyChannel)
 	}
 }
-
-/*
-// copyAllBlobsInContainer recursively copies all blobs (in sub containers) to the destination.
-// Have wrapper function to implementCopyAllBlobsInContainer since we have recursive calls and cant have recursive wg.Done's
-func (ac *AzureCopy) copyAllBlobsInContainer(sourceContainer *models.SimpleContainer, destContainer *models.SimpleContainer, prefix string, replaceExisting bool) error {
-
-	log.Debug("copyAllBlobsInContainer start")
-	defer wg.Done()
-
-	// take entries in container and put them in a channel for copying.
-	copyChannel := make(chan models.SimpleBlob, 1000)
-
-	// copy!!
-	ac.implementCopyAllBlobsInContainer(sourceContainer, prefix, copyChannel)
-
-}
-*/
 
 // populateCopyChannel copies blobs into channel for later copying.
 func (ac *AzureCopy) populateCopyChannel(sourceContainer *models.SimpleContainer, prefix string, copyChannel chan models.SimpleBlob) error {
@@ -284,8 +271,11 @@ func (ac *AzureCopy) populateCopyChannel(sourceContainer *models.SimpleContainer
 
 		if prefix != "" {
 			blob.DestName = prefix + "/" + blob.Name
+		} else {
+			blob.DestName = blob.Name
 		}
 
+		log.Debugf("Adding blob %s to channel", blob.Name)
 		copyChannel <- *blob
 	}
 
@@ -384,7 +374,7 @@ func (ac *AzureCopy) doesDestinationBlobExist(destContainer *models.SimpleContai
 	if destContainer == nil {
 		log.Debugf("dest container is nil")
 	} else {
-		log.Debugf("write dest loc %s ", destContainer.URL)
+		log.Debugf("check dest, write dest loc %s ", destContainer.URL)
 	}
 
 	if err := ac.destHandler.WriteBlob(destContainer, sourceBlob); err != nil {

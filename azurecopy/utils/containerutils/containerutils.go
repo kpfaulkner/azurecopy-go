@@ -1,6 +1,10 @@
 package containerutils
 
-import "azurecopy/azurecopy/models"
+import (
+	"azurecopy/azurecopy/models"
+
+	log "github.com/Sirupsen/logrus"
+)
 
 // GetRootContainer Get root container of a simple container.
 func GetRootContainer(container *models.SimpleContainer) *models.SimpleContainer {
@@ -33,5 +37,7 @@ func GetContainerAndBlobPrefix(container *models.SimpleContainer) (*models.Simpl
 		p = p.ParentContainer
 
 	}
+
+	log.Debugf("Got container: %s , blobprefix: %s", realContainer.Name, blobPrefix)
 	return realContainer, blobPrefix
 }

@@ -149,7 +149,9 @@ func setupConfiguration() *misc.CloudConfig {
 	var dest = flag.String("dest", "", "Destination URL")
 	var debug = flag.Bool("debug", false, "Debug output")
 	var copyCommand = flag.Bool("copy", false, "Copy from source to destination")
-	var copyBlobCommand = flag.Bool("copyblob", false, "Copy from source to destination using Azure CopyBlob flag. Can only be used if Azure is destination")
+	//var copyBlobCommand = flag.Bool("copyblob", false, "Copy from source to destination using Azure CopyBlob flag. Can only be used if Azure is destination")
+
+	var copyBlobCommand = false
 
 	var listCommand = flag.Bool("list", false, "List contents from source")
 	var createContainerCommand = flag.String("createcontainer", "", "Create container for destination")
@@ -185,7 +187,7 @@ func setupConfiguration() *misc.CloudConfig {
 			os.Exit(1)
 		}
 
-		config.Command = getCommand(*copyCommand, *listCommand, *createContainerCommand, *copyBlobCommand)
+		config.Command = getCommand(*copyCommand, *listCommand, *createContainerCommand, copyBlobCommand)
 
 		config.Configuration[misc.Source] = *source
 		config.Configuration[misc.Dest] = *dest

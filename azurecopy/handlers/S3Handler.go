@@ -107,8 +107,6 @@ func (sh *S3Handler) populateSimpleContainer(s3Objects []*s3.Object, container *
 
 		sp := strings.Split(*blob.Key, "/")
 
-		log.Debugf("populateSimpleContainer key is %s", *blob.Key)
-
 		// if no / then no subdirs etc. Just add as is.
 		if len(sp) == 1 {
 			b := models.SimpleBlob{}
@@ -139,12 +137,10 @@ func (sh *S3Handler) populateSimpleContainer(s3Objects []*s3.Object, container *
 			b.Origin = container.Origin
 			b.ParentContainer = container
 
-			log.Debugf("container for copy %s", container)
 			b.BlobCloudName = *blob.Key // cloud specific name... ie the REAL name.
 			b.URL = generateS3URL(*blob.Key, container.Name)
 			currentContainer.BlobSlice = append(currentContainer.BlobSlice, &b)
 			currentContainer.Populated = true
-			log.Debugf("just added blob %s to container", b.Name, currentContainer.Name)
 
 		}
 	}
@@ -159,8 +155,6 @@ func generateS3URL(key string, containerName string) string {
 // getSubContainer gets an existing subcontainer with parent of container and name of segment.
 // otherwise it creates it, adds it to the parent container and returns the new one.
 func (sh *S3Handler) getSubContainer(container *models.SimpleContainer, segment string) *models.SimpleContainer {
-
-	log.Debugf("S3Handler::getSubContainer looking for %s", segment)
 
 	// MUST be a shorthand way of doing this. But still crawling in GO.
 	for _, c := range container.ContainerSlice {
@@ -185,7 +179,6 @@ func (sh *S3Handler) getSubContainer(container *models.SimpleContainer, segment 
 func (sh *S3Handler) GetContainerContentsOverChannel(sourceContainer models.SimpleContainer, blobChannel chan models.SimpleContainer) error {
 	s3Container, blobPrefix := containerutils.GetContainerAndBlobPrefix(&sourceContainer)
 
-	log.Debugf("Blob Prefix %s", blobPrefix)
 	defer close(blobChannel)
 
 	params := s3.ListObjectsV2Input{
@@ -213,7 +206,6 @@ func (sh *S3Handler) GetContainerContentsOverChannel(sourceContainer models.Simp
 
 func (sh *S3Handler) getS3Bucket(containerName string) (*models.SimpleContainer, error) {
 
-	log.Debugf("getS3Bucket %s", containerName)
 	rootContainer := sh.GetRootContainer()
 
 	for _, container := range rootContainer.ContainerSlice {
@@ -227,8 +219,6 @@ func (sh *S3Handler) getS3Bucket(containerName string) (*models.SimpleContainer,
 }
 
 func (sh *S3Handler) generateSubContainers(s3Container *models.SimpleContainer, blobPrefix string) (*models.SimpleContainer, *models.SimpleContainer) {
-
-	log.Debugf("generateSubContainers %s : prefix %s", s3Container.Name, blobPrefix)
 
 	var containerToReturn *models.SimpleContainer
 	var lastContainer *models.SimpleContainer
@@ -267,8 +257,6 @@ func (sh *S3Handler) generateSubContainers(s3Container *models.SimpleContainer, 
 // Conversion from https://bucketname.s3.amazonaws.com/myblob to https://s3.amazonaws.com/bucketname/myblob is done first.
 func (sh *S3Handler) GetSpecificSimpleContainer(URL string) (*models.SimpleContainer, error) {
 
-	log.Debugf("GetSpecificSimpleContainer %s", URL)
-
 	URL = sh.convertURL(URL)
 
 	lastChar := URL[len(URL)-1:]
@@ -300,14 +288,12 @@ func (sh *S3Handler) GetSpecificSimpleContainer(URL string) (*models.SimpleConta
 		log.Fatal(err)
 	}
 
-	log.Debugf("Container: %s blobPrefix: %s", container, blobPrefix)
 	subContainer, lastContainer := sh.generateSubContainers(container, blobPrefix)
 
 	if subContainer != nil {
 		container.ContainerSlice = append(container.ContainerSlice, subContainer)
 	}
 
-	log.Debugf("GetSpecificSimpleContainer returning %s", lastContainer.Name)
 
 	// return the "deepest" container.
 	return lastContainer, nil
@@ -375,7 +361,6 @@ func (sh *S3Handler) generateS3ContainerName(blob models.SimpleBlob) string {
 // PopulateBlob. Used to read a blob IFF we already have a reference to it.
 func (sh *S3Handler) PopulateBlob(blob *models.SimpleBlob) error {
 
-	log.Debug("S3 Populate blob %s", blob)
 	containerName := sh.generateS3ContainerName(*blob)
 
 	req := &s3.GetObjectInput{
@@ -400,7 +385,6 @@ func (sh *S3Handler) PopulateBlob(blob *models.SimpleBlob) error {
 		cacheName := misc.GenerateCacheName(containerName + blob.BlobCloudName)
 		blob.DataCachedAtPath = sh.cacheLocation + cacheName
 
-		log.Debugf("data cache path %s", blob.DataCachedAtPath)
 		cacheFile, err = os.OpenFile(blob.DataCachedAtPath, os.O_WRONLY|os.O_CREATE, 0)
 
 		if err != nil {
@@ -436,13 +420,11 @@ func (sh *S3Handler) PopulateBlob(blob *models.SimpleBlob) error {
 			}
 		} else {
 
-			log.Debugf("adding to memory %d", numBytesRead)
 			// needs to go into a byte array. How do we expand a slice again?
 			blob.DataInMemory = append(blob.DataInMemory, buffer[:numBytesRead]...)
 		}
 	}
 
-	log.Debugf("data in memory is %d", len(blob.DataInMemory))
 
 	return nil
 }
@@ -457,7 +439,6 @@ func (sh *S3Handler) WriteContainer(sourceContainer *models.SimpleContainer, des
 // and if the blobName is "myblob" then the REAL underlying Azure structure would be container == "myrealcontainer"
 // and the blob name is vdir/vdir2/myblob
 func (sh *S3Handler) WriteBlob(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
-	log.Debugf("S3Handler::WriteBlob %s", sourceBlob.Name)
 
 	var err error
 	if sh.cacheToDisk {
@@ -487,19 +468,15 @@ func (sh *S3Handler) getContainerAndBlobNames(destContainer *models.SimpleContai
 		blobName = sourceBlobName
 	}
 
-	log.Debugf("S3 container %s, blob %s", containerName, blobName)
 	return containerName, blobName
 }
 
 // writeBlobFromCache.. read the cache file and pass the byte slice onto the real writer.
 func (sh *S3Handler) writeBlobFromCache(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
-	log.Debugf("writeBlobFromCache %s : %s", sourceBlob.Name, sourceBlob.DataCachedAtPath)
 	containerName, blobName := sh.getContainerAndBlobNames(destContainer, sourceBlob.Name)
 
 	// file stream for cache.
 	var cacheFile *os.File
-
-	log.Debugf("S3:writeBlobFromCache blobname %s", blobName)
 
 	// need to get cache dir from somewhere!
 	cacheFile, err := os.OpenFile(sourceBlob.DataCachedAtPath, os.O_RDONLY, 0)
@@ -508,16 +485,11 @@ func (sh *S3Handler) writeBlobFromCache(destContainer *models.SimpleContainer, s
 		return err
 	}
 
-	log.Debugf("before param %s", blobName)
-
 	params := &s3.PutObjectInput{
 		Bucket: aws.String(containerName),
 		Key:    aws.String(blobName),
 		Body:   cacheFile,
 	}
-	log.Debugf("after param %s", blobName)
-
-	log.Debugf("before putobject %s", params)
 	_, err = sh.s3Client.PutObject(params)
 	if err != nil {
 		log.Errorf("Unable to upload %s", blobName)
@@ -528,7 +500,6 @@ func (sh *S3Handler) writeBlobFromCache(destContainer *models.SimpleContainer, s
 }
 
 func (sh *S3Handler) writeBlobFromMemory(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
-	log.Debugf("writeBlobFromMemory %s", sourceBlob.DataCachedAtPath)
 	containerName, blobName := sh.getContainerAndBlobNames(destContainer, sourceBlob.Name)
 
 	fileBytes := bytes.NewReader(sourceBlob.DataInMemory) // convert to io.ReadSeeker type

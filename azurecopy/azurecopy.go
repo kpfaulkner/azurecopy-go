@@ -91,33 +91,6 @@ func (ac *AzureCopy) ListContainer() (*models.SimpleContainer, error) {
 
 	// get the blobs for the deepest vdir which is part of the URL.
 	ac.sourceHandler.GetContainerContents(container)
-
-	/*
-		// make channel
-		readChannel := make(chan models.SimpleContainer, 1000)
-
-		// get container contents over channel.
-		// get the blobs for the deepest vdir which is part of the URL.
-		go ac.sourceHandler.GetContainerContentsOverChannel(*container, readChannel)
-		if err != nil {
-			log.Fatalf("ListContainer err %s", err)
-		}
-
-		log.Debug("about to loop")
-
-		for {
-			// get data read.
-			containerDetails, ok := <-readChannel
-			if !ok {
-				log.Debug("breaking, read channel closed")
-
-				// channel closed. We're done now.
-				break
-			}
-			// merge containerDetails into original container
-			ac.mergeContainerDetails(&containerDetails, container)
-		}
-	*/
 	return container, nil
 }
 
@@ -211,7 +184,6 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replac
 		log.Fatal("CopyContainerByURL failed dest ", err)
 	}
 
-	log.Debug("about to get over channel")
 	deepestDestinationContainer.DisplayContainer("")
 
 	// make channel for reading from cloud.
@@ -234,8 +206,6 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replac
 		// get data read.
 		containerDetails, ok := <-readChannel
 		if !ok {
-			log.Debug("breaking, read channel closed")
-
 			// channel closed. We're done now.
 			break
 		}
@@ -249,7 +219,6 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replac
 
 	// wait for all copying to be done.
 	wg.Wait()
-	log.Debug("after wait")
 	return nil
 }
 
@@ -300,8 +269,6 @@ func (ac *AzureCopy) populateCopyChannel(sourceContainer *models.SimpleContainer
 // copyBlobFromChannel reads blob from channel and copies it to destinationContainer
 func (ac *AzureCopy) copyBlobFromChannel(destContainer *models.SimpleContainer, replaceExisting bool, copyChannel chan models.SimpleBlob) {
 
-	log.Debug("copyBlobFromChannel start")
-
 	defer wg.Done()
 
 	for {
@@ -323,7 +290,6 @@ func (ac *AzureCopy) copyBlobFromChannel(destContainer *models.SimpleContainer, 
 
 // GetHandlerForURL returns the appropriate handler for a given cloud type.
 func (ac *AzureCopy) GetHandlerForURL(url string, isSource bool, cacheToDisk bool) handlers.CloudHandlerInterface {
-	log.Debugf("GetHandlerForURL %s", url)
 	cloudType, isEmulator := ac.getCloudType(url)
 	handler := utils.GetHandler(cloudType, isSource, ac.config, cacheToDisk, isEmulator)
 	return handler
@@ -359,7 +325,6 @@ func (ac *AzureCopy) GetDestContainerContents(container *models.SimpleContainer)
 // (or in the special case of azure copyblob flag it will do something tricky, once I get to that part)
 func (ac *AzureCopy) ReadBlob(blob *models.SimpleBlob) {
 
-	log.Debugf("ReadBlob %s", blob.Name)
 	err := ac.sourceHandler.PopulateBlob(blob)
 
 	if err != nil {

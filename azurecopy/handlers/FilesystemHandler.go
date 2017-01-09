@@ -34,12 +34,9 @@ type FilesystemHandler struct {
 // assumes using WRONG format. Hmmm will this be cross platform?
 func generateBasePath(rootContainerPath string) (string, string) {
 
-	log.Debugf("generateBasePath %s", rootContainerPath)
-
 	if rootContainerPath != "" {
 		var sp = strings.Split(rootContainerPath, string(os.PathSeparator))
 		l := len(sp)
-		log.Debugf("len sp %d", l)
 
 		genPath := strings.Join(sp[:l-2], string(os.PathSeparator)) + string(os.PathSeparator)
 		container := sp[l-2]
@@ -54,11 +51,9 @@ func generateBasePath(rootContainerPath string) (string, string) {
 // NewFilesystemHandler factory to create new one. Evil?
 func NewFilesystemHandler(rootContainerPath string, isSource bool) (*FilesystemHandler, error) {
 
-	log.Debugf("NewFilesystemHandler %s", rootContainerPath)
 	fh := new(FilesystemHandler)
 	fh.basePath, fh.container = generateBasePath(rootContainerPath)
 
-	log.Debugf("assigning rootContainerPath %s", rootContainerPath)
 	fh.rootContainerPath = rootContainerPath
 	fh.IsSource = isSource
 
@@ -68,8 +63,6 @@ func NewFilesystemHandler(rootContainerPath string, isSource bool) (*FilesystemH
 // GetRootContainer gets root container of Azure. In reality there isn't a root container, but this would basically be a SimpleContainer
 // that has the containerSlice populated with the real Azure containers.
 func (fh *FilesystemHandler) GetRootContainer() models.SimpleContainer {
-
-	log.Debugf("FS:GetRootContainer %s", fh.rootContainerPath)
 
 	dir, err := os.OpenFile(fh.rootContainerPath, os.O_RDONLY, 0)
 	if err != nil {
@@ -133,7 +126,6 @@ func (fh *FilesystemHandler) ReadBlob(container models.SimpleContainer, blobName
 // PopulateBlob. Used to read a blob IFF we already have a reference to it.
 func (fh *FilesystemHandler) PopulateBlob(blob *models.SimpleBlob) error {
 
-	log.Debugf("FS PopulateBlob loc %s", blob.URL)
 	blob.DataCachedAtPath = blob.URL
 	blob.BlobInMemory = false
 
@@ -152,7 +144,6 @@ func (fh *FilesystemHandler) generateAzureContainerName(blob *models.SimpleBlob)
 // and if the blobName is "myblob" then the REAL underlying Azure structure would be container == "myrealcontainer"
 // and the blob name is vdir/vdir2/myblob
 func (fh *FilesystemHandler) WriteBlob(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
-	log.Debugf("FilesystemHandler::WriteBlob ", sourceBlob.Name)
 
 	blobName := sourceBlob.Name
 	if blobName[0] == os.PathSeparator {
@@ -262,7 +253,6 @@ func (fh *FilesystemHandler) GetContainer(containerName string) models.SimpleCon
 
 func (fh *FilesystemHandler) generateFullPath(container *models.SimpleContainer) string {
 
-	log.Debugf("generateFullPath container name is %s", container.Name)
 	path := container.Name
 	currentContainer := container.ParentContainer
 	for currentContainer != nil {
@@ -275,7 +265,6 @@ func (fh *FilesystemHandler) generateFullPath(container *models.SimpleContainer)
 
 	fullPath := fh.basePath + path + string(os.PathSeparator)
 	// if full path is rootContainerPath then we need to actually generate
-	log.Debugf("Generated full path of %s", fullPath)
 	return fullPath
 }
 
@@ -283,7 +272,6 @@ func (fh *FilesystemHandler) generateFullPath(container *models.SimpleContainer)
 // currently wont do recursive.
 func (fh *FilesystemHandler) GetContainerContents(container *models.SimpleContainer) error {
 
-	log.Debugf("filesystem container %s", container.Name)
 	fullPath := fh.generateFullPath(container)
 	dir, err := os.OpenFile(fullPath, os.O_RDONLY, 0)
 	if err != nil {
@@ -363,7 +351,6 @@ func (fh *FilesystemHandler) getSubContainer(container *models.SimpleContainer, 
 // at least help each cloud provider be consistent from a dev pov. Think it's worth the overhead. TODO(kpfaulkner) confirm :)
 func (fh *FilesystemHandler) GetContainerContentsOverChannel(sourceContainer models.SimpleContainer, blobChannel chan models.SimpleContainer) error {
 
-	log.Debug("FS GetContainerContentsOverChannel")
 	defer close(blobChannel)
 	// just do it in bulk for FS. Figure out later if its an issue.
 	fh.GetContainerContents(&sourceContainer)
@@ -376,23 +363,7 @@ func (fh *FilesystemHandler) GetContainerContentsOverChannel(sourceContainer mod
 // eg. c:\temp\mydir1\mydir2\
 func (fh *FilesystemHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleContainer, error) {
 
-	basePath, container := generateBasePath(URL)
-
-	log.Debugf("FS:GetSpecificSimpleContainer %s : %s : %s", URL, basePath, container)
-
-	/*
-		dir, err := os.OpenFile(URL, os.O_RDONLY, 0)
-		if err != nil {
-			log.Fatal("ERR OpenFile ", err)
-		}
-	*/
-
-	/*
-		fileInfos, err := dir.Readdir(0)
-		if err != nil {
-			log.Fatal("ERR ReadDir", err)
-		}
-	*/
+	_, container := generateBasePath(URL)
 
 	rootContainer := models.NewSimpleContainer()
 	rootContainer.URL = URL
@@ -400,34 +371,6 @@ func (fh *FilesystemHandler) GetSpecificSimpleContainer(URL string) (*models.Sim
 	rootContainer.Name = container
 	rootContainer.IsRootContainer = true
 
-	/*
-		for _, f := range fileInfos {
-
-			// determine if file or directory.
-			// do we go recursive?
-			if f.IsDir() {
-				sc := models.NewSimpleContainer()
-				sc.Name = f.Name()
-				sc.Origin = models.Filesystem
-				sc.ParentContainer = rootContainer
-				sc.Populated = false
-				rootContainer.ContainerSlice = append(rootContainer.ContainerSlice, sc)
-
-				log.Debugf("added container %s", sc.Name)
-			} else {
-				b := models.SimpleBlob{}
-				b.Name = f.Name()
-				b.ParentContainer = rootContainer
-				b.Origin = models.Filesystem
-				rootContainer.BlobSlice = append(rootContainer.BlobSlice, &b)
-				log.Debugf("added blob %s", b.Name)
-
-			}
-		}
-		rootContainer.Populated = true
-	*/
-
-	log.Debugf("end of GetSpecificSimpleContainer")
 	return rootContainer, nil
 }
 

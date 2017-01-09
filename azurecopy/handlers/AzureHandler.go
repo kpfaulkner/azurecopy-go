@@ -41,8 +41,6 @@ func NewAzureHandler(accountName string, accountKey string, isSource bool, cache
 	var err error
 	var client storage.Client
 
-	log.Debugf("Azure IsEmulator %s", ah.IsEmulator)
-
 	if isEmulator || (accountName == "" && accountKey == "") {
 		client, err = storage.NewEmulatorClient()
 	} else {
@@ -63,8 +61,6 @@ func NewAzureHandler(accountName string, accountKey string, isSource bool, cache
 // that has the containerSlice populated with the real Azure containers.
 func (ah *AzureHandler) GetRootContainer() models.SimpleContainer {
 
-	log.Debugf("Azurehandler::GetRootContainer")
-
 	params := storage.ListContainersParameters{}
 	containerResponse, err := ah.blobStorageClient.ListContainers(params)
 
@@ -83,7 +79,6 @@ func (ah *AzureHandler) GetRootContainer() models.SimpleContainer {
 		rootContainer.ContainerSlice = append(rootContainer.ContainerSlice, sc)
 	}
 
-	log.Debugf("returning root container %s", *rootContainer)
 	return *rootContainer
 }
 
@@ -106,7 +101,6 @@ func (ah *AzureHandler) BlobExists(container models.SimpleContainer, blobName st
 // returned is vdir.
 func (ah *AzureHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleContainer, error) {
 
-	log.Debugf("AzureHandler::GetSpecificSimpleContainer %s", URL)
 	lastChar := URL[len(URL)-1:]
 	// MUST be a better way to get the last character.
 	if lastChar != "/" {
@@ -129,14 +123,12 @@ func (ah *AzureHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleCo
 		}
 	}
 
-	log.Debugf("Container: %s blobPrefix: %s", container, blobPrefix)
 	subContainer, lastContainer := ah.generateSubContainers(container, blobPrefix)
 
 	if subContainer != nil {
 		container.ContainerSlice = append(container.ContainerSlice, subContainer)
 	}
 
-	log.Debugf("GetSpecificSimpleContainer returning %s", lastContainer.Name)
 
 	// return the "deepest" container.
 	return lastContainer, nil
@@ -148,7 +140,6 @@ func (ah *AzureHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleCo
 // at least help each cloud provider be consistent from a dev pov. Think it's worth the overhead. TODO(kpfaulkner) confirm :)
 func (ah *AzureHandler) GetContainerContentsOverChannel(sourceContainer models.SimpleContainer, blobChannel chan models.SimpleContainer) error {
 
-	log.Debug("GetContainerContentsOverChannel start")
 	azureContainer, blobPrefix := containerutils.GetContainerAndBlobPrefix(&sourceContainer)
 
 	// now we have the azure container and the prefix, we should be able to get a list of
@@ -163,10 +154,6 @@ func (ah *AzureHandler) GetContainerContentsOverChannel(sourceContainer models.S
 		blobListResponse, err := ah.blobStorageClient.ListBlobs(containerClone.Name, params)
 		if err != nil {
 			log.Fatal("Error")
-		}
-
-		for _, b := range blobListResponse.Blobs {
-			log.Debugf("blob %s", b.Name)
 		}
 
 		ah.populateSimpleContainer(blobListResponse, &containerClone)
@@ -187,8 +174,6 @@ func (ah *AzureHandler) GetContainerContentsOverChannel(sourceContainer models.S
 }
 
 func (ah *AzureHandler) generateSubContainers(azureContainer *models.SimpleContainer, blobPrefix string) (*models.SimpleContainer, *models.SimpleContainer) {
-
-	log.Debugf("generateSubContainers %s : prefix %s", azureContainer.Name, blobPrefix)
 
 	var containerToReturn *models.SimpleContainer
 	var lastContainer *models.SimpleContainer
@@ -225,7 +210,6 @@ func (ah *AzureHandler) generateSubContainers(azureContainer *models.SimpleConta
 
 func (ah *AzureHandler) getAzureContainer(containerName string) (*models.SimpleContainer, error) {
 
-	log.Debugf("getAzureContainer %s", containerName)
 	rootContainer := ah.GetRootContainer()
 
 	for _, container := range rootContainer.ContainerSlice {
@@ -303,8 +287,6 @@ func (ah *AzureHandler) PopulateBlob(blob *models.SimpleBlob) error {
 	azureContainerName := ah.generateAzureContainerName(*blob)
 	azureBlobName := blob.BlobCloudName
 
-	log.Debugf("AzureHandler::PopulateBlob blobname %s", azureBlobName)
-
 	sr, err := ah.blobStorageClient.GetBlob(azureContainerName, azureBlobName)
 
 	if err != nil {
@@ -356,13 +338,10 @@ func (ah *AzureHandler) PopulateBlob(blob *models.SimpleBlob) error {
 			}
 		} else {
 
-			log.Debugf("adding to memory %d", numBytesRead)
 			// needs to go into a byte array. How do we expand a slice again?
 			blob.DataInMemory = append(blob.DataInMemory, buffer[:numBytesRead]...)
 		}
 	}
-
-	log.Debugf("data in memory is %d", len(blob.DataInMemory))
 
 	return nil
 }
@@ -387,8 +366,6 @@ func (ah *AzureHandler) WriteContainer(sourceContainer *models.SimpleContainer, 
 // and if the blobName is "myblob" then the REAL underlying Azure structure would be container == "myrealcontainer"
 // and the blob name is vdir/vdir2/myblob
 func (ah *AzureHandler) WriteBlob(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
-
-	log.Debugf("AzureHandler::WriteBlob")
 
 	var err error
 	if ah.cacheToDisk {
@@ -423,8 +400,6 @@ func (ah *AzureHandler) getContainerAndBlobNames(destContainer *models.SimpleCon
 
 // writeBlobFromCache.. read the cache file and pass the byte slice onto the real writer.
 func (ah *AzureHandler) writeBlobFromCache(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
-	log.Debugf("writeBlobFromCache %s", sourceBlob.DataCachedAtPath)
-
 	azureContainerName, azureBlobName := ah.getContainerAndBlobNames(destContainer, sourceBlob.Name)
 	_, err := ah.blobStorageClient.CreateContainerIfNotExists(azureContainerName, storage.ContainerAccessTypePrivate)
 	if err != nil {
@@ -457,7 +432,6 @@ func (ah *AzureHandler) writeBlobFromCache(destContainer *models.SimpleContainer
 			finishedProcessing = true
 			continue
 		}
-		log.Debugf("buffer length %d", len(buffer))
 		blockID, err := ah.writeMemoryToBlob(azureContainerName, azureBlobName, buffer[:numBytesRead])
 		if err != nil {
 			log.Fatal("Unable to write memory to blob ", err)
@@ -522,7 +496,6 @@ func (ah *AzureHandler) writeBlobFromMemory(destContainer *models.SimpleContaine
 
 func (ah *AzureHandler) putBlockIDList(containerName string, blobName string, blockIDList []string) error {
 
-	log.Debug("AzureHandler::putBlockIDList")
 	blockSlice := ah.generateBlockSlice(blockIDList)
 	if err := ah.blobStorageClient.PutBlockList(containerName, blobName, blockSlice); err != nil {
 		log.Fatal("putBlockIDList failed ", err)
@@ -553,7 +526,6 @@ func (ah *AzureHandler) writeMemoryToBlob(containerName string, blobName string,
 
 	blockID = base64.StdEncoding.EncodeToString(buffer)
 
-	log.Debugf("Creating blockID %s", blockID)
 	err := ah.blobStorageClient.PutBlock(containerName, blobName, blockID, buffer)
 	if err != nil {
 		log.Fatal("Unable to PutBlock ", blockID)
@@ -566,7 +538,6 @@ func (ah *AzureHandler) writeMemoryToBlob(containerName string, blobName string,
 // ie will only do ROOT level containers (ie REAL Azure container)
 func (ah *AzureHandler) CreateContainer(containerName string) (models.SimpleContainer, error) {
 	var container models.SimpleContainer
-	log.Debugf("CreateContainer %s", containerName)
 
 	err := ah.blobStorageClient.CreateContainer(containerName, storage.ContainerAccessTypeBlob)
 	if err != nil {
@@ -594,7 +565,6 @@ func (ah *AzureHandler) GetContainer(containerName string) models.SimpleContaine
 // TODO(kpfaulkner) use marker and get next lot of results when we have > 5000 blobs.
 func (ah *AzureHandler) GetContainerContents(container *models.SimpleContainer) error {
 
-	log.Debug("GetContainerContents")
 	azureContainer, blobPrefix := containerutils.GetContainerAndBlobPrefix(container)
 
 	// now we have the azure container and the prefix, we should be able to get a list of
@@ -658,7 +628,6 @@ func (ah *AzureHandler) populateSimpleContainer(blobListResponse storage.BlobLis
 			b.URL = ah.blobStorageClient.GetBlobURL(container.Name, blob.Name)
 			currentContainer.BlobSlice = append(currentContainer.BlobSlice, &b)
 			currentContainer.Populated = true
-			log.Debugf("just added blob %s to container", b.Name, currentContainer.Name)
 
 		}
 	}
@@ -668,8 +637,6 @@ func (ah *AzureHandler) populateSimpleContainer(blobListResponse storage.BlobLis
 // getSubContainer gets an existing subcontainer with parent of container and name of segment.
 // otherwise it creates it, adds it to the parent container and returns the new one.
 func (ah *AzureHandler) getSubContainer(container *models.SimpleContainer, segment string) *models.SimpleContainer {
-
-	log.Debugf("AzureHandler::getSubContainer looking for %s", segment)
 
 	// MUST be a shorthand way of doing this. But still crawling in GO.
 	for _, c := range container.ContainerSlice {

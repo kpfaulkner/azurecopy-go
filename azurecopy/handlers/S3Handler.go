@@ -390,9 +390,16 @@ func (sh *S3Handler) PopulateBlob(blob *models.SimpleBlob) error {
 	if sh.cacheToDisk {
 
 		cacheName := misc.GenerateCacheName(containerName + blob.BlobCloudName)
-		blob.DataCachedAtPath = sh.cacheLocation + cacheName
+		blob.DataCachedAtPath = sh.cacheLocation + "/" + cacheName
 
 		cacheFile, err = os.OpenFile(blob.DataCachedAtPath, os.O_WRONLY|os.O_CREATE, 0)
+
+		defer func() {
+			log.Debugf("deferring closing of written file")
+			err = cacheFile.Close()
+		}()
+
+		//	defer cacheFile.Close()
 
 		if err != nil {
 			log.Fatal(err)
@@ -430,6 +437,13 @@ func (sh *S3Handler) PopulateBlob(blob *models.SimpleBlob) error {
 			// needs to go into a byte array. How do we expand a slice again?
 			blob.DataInMemory = append(blob.DataInMemory, buffer[:numBytesRead]...)
 		}
+	}
+
+	if cacheFile != nil {
+		log.Debugf("manually closing file %s", blob.DataCachedAtPath)
+		cacheFile.Close()
+	} else {
+		log.Debug("no manual closing needed")
 	}
 
 	return nil
@@ -490,6 +504,7 @@ func (sh *S3Handler) writeBlobFromCache(destContainer *models.SimpleContainer, s
 		log.Errorf("Unable to open cache file %s", sourceBlob.DataCachedAtPath)
 		return err
 	}
+	defer cacheFile.Close()
 
 	params := &s3.PutObjectInput{
 		Bucket: aws.String(containerName),

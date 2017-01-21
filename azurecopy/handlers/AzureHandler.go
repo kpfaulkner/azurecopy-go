@@ -320,8 +320,10 @@ func (ah *AzureHandler) PopulateBlob(blob *models.SimpleBlob) error {
 	if ah.cacheToDisk {
 
 		cacheName := misc.GenerateCacheName(azureContainerName + blob.BlobCloudName)
-		blob.DataCachedAtPath = ah.cacheLocation + cacheName
+		blob.DataCachedAtPath = ah.cacheLocation + "/" + cacheName
+		log.Debugf("cache location is %s", blob.DataCachedAtPath)
 		cacheFile, err = os.OpenFile(blob.DataCachedAtPath, os.O_WRONLY|os.O_CREATE, 0)
+		defer cacheFile.Close()
 
 		if err != nil {
 			log.Fatal(err)
@@ -434,6 +436,7 @@ func (ah *AzureHandler) writeBlobFromCache(destContainer *models.SimpleContainer
 		log.Fatal(err)
 		return err
 	}
+	defer cacheFile.Close()
 
 	buffer := make([]byte, 1024*100)
 	numBytesRead := 0

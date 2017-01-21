@@ -11,6 +11,8 @@ import (
 
 	"sync"
 
+	"os"
+
 	log "github.com/Sirupsen/logrus"
 )
 
@@ -365,7 +367,17 @@ func (ac *AzureCopy) WriteBlob(destContainer *models.SimpleContainer, sourceBlob
 	}
 
 	if err := ac.destHandler.WriteBlob(destContainer, sourceBlob); err != nil {
-		log.Fatal("WriteBlob kaboom ", err)
+		log.Fatalf("WriteBlob kaboom %s", err)
 	}
+
+	// if cached delete the cache.
+	if !sourceBlob.BlobInMemory {
+		log.Debugf("About to delete cache file %s", sourceBlob.DataCachedAtPath)
+		err := os.Remove(sourceBlob.DataCachedAtPath)
+		if err != nil {
+			log.Errorf("Unable to delete cache file %s", err)
+		}
+	}
+
 	return nil
 }

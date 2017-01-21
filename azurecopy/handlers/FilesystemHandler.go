@@ -374,6 +374,10 @@ func (fh *FilesystemHandler) GetSpecificSimpleContainer(URL string) (*models.Sim
 	return rootContainer, nil
 }
 
+func (fh *FilesystemHandler) GeneratePresignedURL(blob *models.SimpleBlob) (string, error) {
+	return "", nil
+}
+
 // GetSpecificSimpleBlob given a URL (NOT ending in /) then get the SIMPLE blob that represents it.
 func (fh *FilesystemHandler) GetSpecificSimpleBlob(URL string) (*models.SimpleBlob, error) {
 	return nil, nil

@@ -48,4 +48,7 @@ type CloudHandlerInterface interface {
 
 	// populates container with data.
 	GetContainerContents(container *models.SimpleContainer) error
+
+	// generates presigned URL so Azure can access blob for CopyBlob flag operation.
+	GeneratePresignedURL(blob *models.SimpleBlob) (string, error)
 }

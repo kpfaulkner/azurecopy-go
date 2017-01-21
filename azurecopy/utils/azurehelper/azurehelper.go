@@ -1,26 +1,45 @@
 package azurehelper
 
-import "azurecopy/azurecopy/models"
+import (
+	"azure-sdk-for-go/storage"
+	"azurecopy/azurecopy/models"
+	"azurecopy/azurecopy/utils/containerutils"
 
-// GetAzureContainer Gets the REAL Azure container and the blob prefix for a given SimpleContainer
-// that has been passed in.
-func GetContainerAndBlobPrefixXXX(container *models.SimpleContainer) (*models.SimpleContainer, string) {
-	var p *models.SimpleContainer
-	blobPrefix := ""
-	var azureContainer *models.SimpleContainer
+	log "github.com/Sirupsen/logrus"
+)
 
-	for p = container; p != nil; {
+type AzureHelper struct {
+	client storage.BlobStorageClient
+}
 
-		// if parent container is not nil, then we're NOT a real azure container.
-		if p.ParentContainer != nil {
-			blobPrefix = p.Name + "/" + blobPrefix
-		} else {
-			// parent IS nil, therefore we're in the real azure container.
-			azureContainer = p
-		}
+func NewAzureHelper(accountName string, accountKey string) *AzureHelper {
 
-		p = p.ParentContainer
+	ah := new(AzureHelper)
 
+	client, err := storage.NewBasicClient(accountName, accountKey)
+	if err != nil {
+		log.Fatalf("NewAzureHelper cannot generate Azure Storage client", err)
 	}
-	return azureContainer, blobPrefix
+
+	ah.client = client.GetBlobService()
+	return ah
+}
+
+// DoCopyBlobUsingAzureCopyBlobFlag copy using Azure CopyBlob flag.
+// Have to create a new instance of the storage client. I can't get it out of AzureHandler since
+// we get that via an interface, and obviously not all handlers will have Azure clients.
+// TODO(kpfaulkner) revisit and find a better way, but new client for now isn't completely terrible.
+func (ah *AzureHelper) DoCopyBlobUsingAzureCopyBlobFlag(url string, destContainer *models.SimpleContainer, destBlobName string) error {
+
+	// need to get real azure container but I *think* destBlobName has already been correctly converted.
+	// need to check that! TODO(kpfaulkner)
+
+	container, _ := containerutils.GetContainerAndBlobPrefix(destContainer)
+
+	log.Debugf("CopyBlob: source %s : dest container %s : blobname %s", url, container.Name, destBlobName)
+	err := ah.client.CopyBlob(container.Name, destBlobName, url)
+	if err != nil {
+		log.Errorf("Unable to copy %s", url)
+	}
+	return nil
 }

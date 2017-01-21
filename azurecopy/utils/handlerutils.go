@@ -14,7 +14,7 @@ func GetHandler(cloudType models.CloudType, isSource bool, config misc.CloudConf
 	switch cloudType {
 	case models.Azure:
 
-		accountName, accountKey := getAzureCredentials(isSource, config)
+		accountName, accountKey := GetAzureCredentials(isSource, config)
 
 		log.Debug("Got Azure Handler")
 		ah, _ := handlers.NewAzureHandler(accountName, accountKey, isSource, cacheToDisk, isEmulator)
@@ -43,7 +43,7 @@ func GetHandler(cloudType models.CloudType, isSource bool, config misc.CloudConf
 	return nil
 }
 
-func getAzureCredentials(isSource bool, config misc.CloudConfig) (accountName string, accountKey string) {
+func GetAzureCredentials(isSource bool, config misc.CloudConfig) (accountName string, accountKey string) {
 	if isSource {
 		accountName = config.Configuration[misc.AzureSourceAccountName]
 		accountKey = config.Configuration[misc.AzureSourceAccountKey]

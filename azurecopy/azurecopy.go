@@ -4,6 +4,7 @@ import (
 	"azurecopy/azurecopy/handlers"
 	"azurecopy/azurecopy/models"
 	"azurecopy/azurecopy/utils"
+	"azurecopy/azurecopy/utils/azurehelper"
 	"azurecopy/azurecopy/utils/misc"
 	"regexp"
 	"strings"
@@ -106,42 +107,15 @@ func (ac *AzureCopy) CreateContainer(containerName string) error {
 	return nil
 }
 
-// CopyBlobByURLUsingCopyBlob copy a blob from one URL to another using Azure CopyBlob functionality.
-// This only works if the destination is Azure.
-func (ac *AzureCopy) CopyBlobByURLUsingCopyBlob(replaceExisting bool) error {
-
-	/*
-		// check destination is Azure. If not, kaboom!
-		if ac.destCloudType != models.Azure {
-
-		}
-
-		var err error
-
-		// need to make this cloud/fs agnostic!
-		if misc.GetLastChar(ac.sourceURL) == "/" || misc.GetLastChar(ac.sourceURL) == "\\" {
-			// copying a directory/vdir worth of stuff....
-			err = ac.CopyContainerByURLUsingCopyBlob(ac.sourceURL, ac.destURL, replaceExisting)
-		} else {
-			err = ac.CopySingleBlobByURL(ac.sourceURL, ac.destURL, replaceExisting)
-		}
-
-		if err != nil {
-			log.Fatal("CopyBlobByUrl error ", err)
-		}
-	*/
-	return nil
-}
-
 // CopyBlobByURL copy a blob from one URL to another.
-func (ac *AzureCopy) CopyBlobByURL(replaceExisting bool) error {
+func (ac *AzureCopy) CopyBlobByURL(replaceExisting bool, useCopyBlobFlag bool) error {
 
 	var err error
 	if misc.GetLastChar(ac.sourceURL) == "/" || misc.GetLastChar(ac.sourceURL) == "\\" {
 		// copying a directory/vdir worth of stuff....
-		err = ac.CopyContainerByURL(ac.sourceURL, ac.destURL, replaceExisting)
+		err = ac.CopyContainerByURL(ac.sourceURL, ac.destURL, replaceExisting, useCopyBlobFlag)
 	} else {
-		err = ac.CopySingleBlobByURL(ac.sourceURL, ac.destURL, replaceExisting)
+		err = ac.CopySingleBlobByURL(ac.sourceURL, ac.destURL, replaceExisting, useCopyBlobFlag)
 	}
 
 	if err != nil {
@@ -151,7 +125,8 @@ func (ac *AzureCopy) CopyBlobByURL(replaceExisting bool) error {
 }
 
 // CopySingleBlobByURL copies a single blob referenced by URL to a destination URL
-func (ac *AzureCopy) CopySingleBlobByURL(sourceURL string, destURL string, replaceExisting bool) error {
+// useCopyBlobFlag currently unused!! TODO(kpfaulkner)
+func (ac *AzureCopy) CopySingleBlobByURL(sourceURL string, destURL string, replaceExisting bool, useCopyBlobFlag bool) error {
 
 	deepestContainer, err := ac.sourceHandler.GetSpecificSimpleContainer(sourceURL)
 	if err != nil {
@@ -170,7 +145,7 @@ func (ac *AzureCopy) CopySingleBlobByURL(sourceURL string, destURL string, repla
 // want to make sure copying at least is able to start copying blobs before the listing is finished.
 // So will use GoRoutines to concurrently retrieve list of blobs and another for writing to destination.
 // First real attempt using GoRoutines for something "real" so will see how it goes.
-func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replaceExisting bool) error {
+func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replaceExisting bool, useCopyBlobFlag bool) error {
 
 	log.Infof("copy from %s to %s", sourceURL, destURL)
 
@@ -184,8 +159,6 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replac
 		log.Fatal("CopyContainerByURL failed dest ", err)
 	}
 
-	deepestDestinationContainer.DisplayContainer("")
-
 	// make channel for reading from cloud.
 	readChannel := make(chan models.SimpleContainer, 1000)
 
@@ -193,7 +166,7 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replac
 	copyChannel := make(chan models.SimpleBlob, 1000)
 
 	// launch go routines for copying.
-	ac.launchCopyGoRoutines(deepestDestinationContainer, replaceExisting, copyChannel)
+	ac.launchCopyGoRoutines(deepestDestinationContainer, replaceExisting, copyChannel, useCopyBlobFlag)
 
 	// get container contents over channel.
 	// get the blobs for the deepest vdir which is part of the URL.
@@ -223,12 +196,17 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replac
 }
 
 // launchCopyGoRoutines starts a number of Go Routines used for copying contents.
-func (ac *AzureCopy) launchCopyGoRoutines(destContainer *models.SimpleContainer, replaceExisting bool, copyChannel chan models.SimpleBlob) {
+func (ac *AzureCopy) launchCopyGoRoutines(destContainer *models.SimpleContainer, replaceExisting bool, copyChannel chan models.SimpleBlob, useCopyBlobFlag bool) {
 
 	log.Debugf("launching %d goroutines", ac.config.ConcurrentCount)
 	for i := 0; i < int(ac.config.ConcurrentCount); i++ {
 		wg.Add(1)
-		go ac.copyBlobFromChannel(destContainer, replaceExisting, copyChannel)
+
+		if useCopyBlobFlag {
+			go ac.copyBlobFromChannelUsingCopyBlobFlag(destContainer, replaceExisting, copyChannel)
+		} else {
+			go ac.copyBlobFromChannel(destContainer, replaceExisting, copyChannel)
+		}
 	}
 }
 
@@ -284,6 +262,35 @@ func (ac *AzureCopy) copyBlobFromChannel(destContainer *models.SimpleContainer, 
 		blob.Name = blob.DestName
 
 		ac.WriteBlob(destContainer, &blob)
+	}
+
+}
+
+// copyBlobFromChannelUsingCopyBlobFlag reads blob from channel, makes presigned URL (based on source blob) then triggers Azure CopyBlob operation.
+func (ac *AzureCopy) copyBlobFromChannelUsingCopyBlobFlag(destContainer *models.SimpleContainer, replaceExisting bool, copyChannel chan models.SimpleBlob) {
+
+	defer wg.Done()
+
+	azureAccountName, azureAccountKey := utils.GetAzureCredentials(false, ac.config)
+
+	azureHelper := azurehelper.NewAzureHelper(azureAccountName, azureAccountKey)
+
+	for {
+		blob, ok := <-copyChannel
+		if !ok {
+			// closed...   so all writing is done?  Or what?
+			return
+		}
+
+		// generate presigned URL
+		// ac.ReadBlob(&blob)
+		url, err := ac.sourceHandler.GeneratePresignedURL(&blob)
+		if err != nil {
+			log.Errorf("Unable to copy blob %s", blob.URL)
+			continue
+		}
+
+		azureHelper.DoCopyBlobUsingAzureCopyBlobFlag(url, destContainer, blob.DestName)
 	}
 
 }

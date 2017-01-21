@@ -7,9 +7,11 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
@@ -32,14 +34,20 @@ type S3Handler struct {
 
 // NewS3Handler factory to create new one. Evil?
 func NewS3Handler(accessID string, accessSecret string, region string, isSource bool, cacheToDisk bool) (*S3Handler, error) {
+
 	sh := new(S3Handler)
 
 	sh.cacheToDisk = cacheToDisk
-	sh.cacheLocation = "c:/temp/cache/" // NFI... just making something up for now
+	dir, err := ioutil.TempDir("", "azurecopy")
+	if err != nil {
+		log.Fatalf("Unable to create temp directory %s", err)
+	}
+
+	sh.cacheLocation = dir
 	sh.IsSource = isSource
 
 	creds := credentials.NewStaticCredentials(accessID, accessSecret, "")
-	_, err := creds.Get()
+	_, err = creds.Get()
 	if err != nil {
 		log.Fatalf("Bad S3 credentials: %s", err)
 	}
@@ -294,7 +302,6 @@ func (sh *S3Handler) GetSpecificSimpleContainer(URL string) (*models.SimpleConta
 		container.ContainerSlice = append(container.ContainerSlice, subContainer)
 	}
 
-
 	// return the "deepest" container.
 	return lastContainer, nil
 }
@@ -424,7 +431,6 @@ func (sh *S3Handler) PopulateBlob(blob *models.SimpleBlob) error {
 			blob.DataInMemory = append(blob.DataInMemory, buffer[:numBytesRead]...)
 		}
 	}
-
 
 	return nil
 }
@@ -568,4 +574,28 @@ func (sh *S3Handler) GetContainerContents(container *models.SimpleContainer) err
 	sh.populateSimpleContainer(blobSlice, container)
 
 	return nil
+}
+
+/* presign URL code.....  use it eventually.
+ */
+
+func (sh *S3Handler) GeneratePresignedURL(blob *models.SimpleBlob) (string, error) {
+
+	log.Debugf("S3:GeneratePresignedURL")
+	s3Container, _ := containerutils.GetContainerAndBlobPrefix(blob.ParentContainer)
+
+	r, _ := sh.s3Client.PutObjectRequest(&s3.PutObjectInput{
+		Bucket: aws.String(s3Container.Name),
+		Key:    aws.String(blob.BlobCloudName),
+	})
+
+	// r.HTTPRequest.Header.Set("Content-MD5", checksum)
+	url, err := r.Presign(15 * time.Minute)
+	if err != nil {
+		log.Error("error presigning request", err)
+		return "", err
+	}
+
+	log.Debugf("presigned URL is %s", url)
+	return url, nil
 }

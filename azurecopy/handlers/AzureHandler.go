@@ -6,6 +6,7 @@ import (
 	"azurecopy/azurecopy/utils/misc"
 	"encoding/base64"
 	"errors"
+	"io/ioutil"
 	"os"
 	"regexp"
 	"strings"
@@ -35,10 +36,14 @@ func NewAzureHandler(accountName string, accountKey string, isSource bool, cache
 	ah := new(AzureHandler)
 
 	ah.cacheToDisk = cacheToDisk
-	ah.cacheLocation = "c:/temp/cache/" // NFI... just making something up for now
+	dir, err := ioutil.TempDir("", "azurecopy")
+	if err != nil {
+		log.Fatalf("Unable to create temp directory %s", err)
+	}
+
+	ah.cacheLocation = dir
 	ah.IsSource = isSource
 	ah.IsEmulator = isEmulator
-	var err error
 	var client storage.Client
 
 	if isEmulator || (accountName == "" && accountKey == "") {
@@ -55,6 +60,17 @@ func NewAzureHandler(accountName string, accountKey string, isSource bool, cache
 
 	ah.blobStorageClient = client.GetBlobService()
 	return ah, nil
+}
+
+// GetClient gets the Azure client. This is needed to be exposed so a helper function elsewhere can
+func (ah *AzureHandler) GetClient() *storage.BlobStorageClient {
+	return &ah.blobStorageClient
+}
+
+// DoCopyBlobUsingAzureCopyBlobFlag copy using Azure CopyBlob flag.
+func (ah *AzureHandler) DoCopyBlobUsingAzureCopyBlobFlag(sourceBlob *models.SimpleBlob, destContainer *models.SimpleContainer, destBlobName string) error {
+
+	return nil
 }
 
 // GetRootContainer gets root container of Azure. In reality there isn't a root container, but this would basically be a SimpleContainer
@@ -129,7 +145,6 @@ func (ah *AzureHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleCo
 		container.ContainerSlice = append(container.ContainerSlice, subContainer)
 	}
 
-
 	// return the "deepest" container.
 	return lastContainer, nil
 }
@@ -145,8 +160,7 @@ func (ah *AzureHandler) GetContainerContentsOverChannel(sourceContainer models.S
 	// now we have the azure container and the prefix, we should be able to get a list of
 	// SimpleContainers and SimpleBlobs to add this to original container.
 	// Keep max results to 1000, can loop through and
-	params := storage.ListBlobsParameters{Prefix: blobPrefix, MaxResults: 2}
-
+	params := storage.ListBlobsParameters{Prefix: blobPrefix, MaxResults: 1000}
 	done := false
 	for done == false {
 		// copy of container, dont want to send back ever growing container via the channel.
@@ -171,6 +185,10 @@ func (ah *AzureHandler) GetContainerContentsOverChannel(sourceContainer models.S
 
 	close(blobChannel)
 	return nil
+}
+
+func (ah *AzureHandler) GeneratePresignedURL(blob *models.SimpleBlob) (string, error) {
+	return "", nil
 }
 
 func (ah *AzureHandler) generateSubContainers(azureContainer *models.SimpleContainer, blobPrefix string) (*models.SimpleContainer, *models.SimpleContainer) {

@@ -24,64 +24,6 @@ const (
 
 var Version string
 
-/*
-func FSToAzure() {
-	ac := azurecopy.NewAzureCopy(true)
-
-	rootContainer := ac.GetRootContainer(models.Filesystem)
-
-	for _, c := range rootContainer.ContainerSlice {
-		if c.Name == "img" {
-			ac.GetContainerContents(c)
-
-			blob, err := c.GetBlob("F9.JPG")
-			if err != nil {
-				log.Fatal(err)
-			}
-			azureRootContainer := ac.GetRootContainer(models.Azure)
-
-			ac.ReadBlob(blob)
-
-			tempContainer, err := azureRootContainer.GetContainer("temp")
-			if err != nil {
-				log.Fatal("GetContainer ", err)
-			}
-
-			ac.WriteBlob(tempContainer, blob)
-		}
-	}
-
-}
-
-func messingABout() {
-	ac := azurecopy.NewAzureCopy(true)
-
-	azureRootContainer := ac.GetRootContainer(models.Azure)
-
-	for _, c := range azureRootContainer.ContainerSlice {
-		if c.Name == "temp" {
-			ac.GetContainerContents(c)
-
-			blob, err := c.GetBlob("F9.JPG")
-			if err != nil {
-				log.Fatal(err)
-			}
-			rootContainer := ac.GetRootContainer(models.Filesystem)
-
-			ac.ReadBlob(blob)
-
-			tempContainer, err := rootContainer.GetContainer("temp")
-			if err != nil {
-				log.Fatal("GetContainer ", err)
-			}
-
-			ac.WriteBlob(tempContainer, blob)
-		}
-	}
-
-}
-*/
-
 func generateSpace(c int) string {
 	s := ""
 	for i := 0; i < c; i++ {
@@ -149,9 +91,9 @@ func setupConfiguration() *misc.CloudConfig {
 	var dest = flag.String("dest", "", "Destination URL")
 	var debug = flag.Bool("debug", false, "Debug output")
 	var copyCommand = flag.Bool("copy", false, "Copy from source to destination")
-	//var copyBlobCommand = flag.Bool("copyblob", false, "Copy from source to destination using Azure CopyBlob flag. Can only be used if Azure is destination")
+	var copyBlobCommand = flag.Bool("copyblob", false, "Copy from source to destination using Azure CopyBlob flag. Can only be used if Azure is destination")
 
-	var copyBlobCommand = false
+	//var copyBlobCommand = false
 
 	var listCommand = flag.Bool("list", false, "List contents from source")
 	var createContainerCommand = flag.String("createcontainer", "", "Create container for destination")
@@ -187,7 +129,7 @@ func setupConfiguration() *misc.CloudConfig {
 			os.Exit(1)
 		}
 
-		config.Command = getCommand(*copyCommand, *listCommand, *createContainerCommand, copyBlobCommand)
+		config.Command = getCommand(*copyCommand, *listCommand, *createContainerCommand, *copyBlobCommand)
 
 		config.Configuration[misc.Source] = *source
 		config.Configuration[misc.Dest] = *dest
@@ -238,14 +180,14 @@ func main() {
 
 	switch config.Command {
 	case CommandCopy:
-		err := ac.CopyBlobByURL(config.Replace)
+		err := ac.CopyBlobByURL(config.Replace, false)
 		if err != nil {
 			log.Fatal(err)
 		}
 		break
 
 	case CommandCopyBlob:
-		err := ac.CopyBlobByURLUsingCopyBlob(config.Replace)
+		err := ac.CopyBlobByURL(config.Replace, true)
 		if err != nil {
 			log.Fatal(err)
 		}

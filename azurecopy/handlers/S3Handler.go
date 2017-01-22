@@ -392,7 +392,7 @@ func (sh *S3Handler) PopulateBlob(blob *models.SimpleBlob) error {
 		cacheName := misc.GenerateCacheName(containerName + blob.BlobCloudName)
 		blob.DataCachedAtPath = sh.cacheLocation + "/" + cacheName
 
-		cacheFile, err = os.OpenFile(blob.DataCachedAtPath, os.O_WRONLY|os.O_CREATE, 0)
+		cacheFile, err = os.OpenFile(blob.DataCachedAtPath, os.O_WRONLY|os.O_CREATE, 0666)
 
 		defer func() {
 			log.Debugf("deferring closing of written file")

@@ -322,7 +322,7 @@ func (ah *AzureHandler) PopulateBlob(blob *models.SimpleBlob) error {
 		cacheName := misc.GenerateCacheName(azureContainerName + blob.BlobCloudName)
 		blob.DataCachedAtPath = ah.cacheLocation + "/" + cacheName
 		log.Debugf("cache location is %s", blob.DataCachedAtPath)
-		cacheFile, err = os.OpenFile(blob.DataCachedAtPath, os.O_WRONLY|os.O_CREATE, 0)
+		cacheFile, err = os.OpenFile(blob.DataCachedAtPath, os.O_WRONLY|os.O_CREATE, 0666)
 		defer cacheFile.Close()
 
 		if err != nil {

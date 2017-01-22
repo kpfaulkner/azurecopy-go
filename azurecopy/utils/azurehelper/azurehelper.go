@@ -39,7 +39,7 @@ func (ah *AzureHelper) DoCopyBlobUsingAzureCopyBlobFlag(url string, destContaine
 	log.Debugf("CopyBlob: source %s : dest container %s : blobname %s", url, container.Name, destBlobName)
 	err := ah.client.CopyBlob(container.Name, destBlobName, url)
 	if err != nil {
-		log.Errorf("Unable to copy %s", url)
+		log.Errorf("Unable to copy %s %s", url, err)
 	}
 	return nil
 }

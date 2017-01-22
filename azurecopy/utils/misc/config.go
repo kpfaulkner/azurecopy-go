@@ -35,6 +35,16 @@ const (
 	CreateContainerName = "CreateContainer"
 )
 
+// Commands to execute
+const (
+	CommandCopy = iota
+	CommandList
+	CommandCreateContainer
+	CommandUnknown
+	CommandListContainer
+	CommandCopyBlob
+)
+
 // CloudConfig UGLY UGLY UGLY way to store the configuration.
 // globally accessible, otherwise I'm passing it everywhere.
 type CloudConfig struct {

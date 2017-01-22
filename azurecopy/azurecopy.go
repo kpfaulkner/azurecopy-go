@@ -288,7 +288,7 @@ func (ac *AzureCopy) copyBlobFromChannelUsingCopyBlobFlag(destContainer *models.
 		// ac.ReadBlob(&blob)
 		url, err := ac.sourceHandler.GeneratePresignedURL(&blob)
 		if err != nil {
-			log.Errorf("Unable to copy blob %s", blob.URL)
+			log.Errorf("Unable to generate presigned URL %s", blob.URL)
 			continue
 		}
 
@@ -371,7 +371,7 @@ func (ac *AzureCopy) WriteBlob(destContainer *models.SimpleContainer, sourceBlob
 	}
 
 	// if cached delete the cache.
-	if !sourceBlob.BlobInMemory {
+	if !sourceBlob.BlobInMemory && ac.config.Command != misc.CommandCopyBlob {
 		log.Debugf("About to delete cache file %s", sourceBlob.DataCachedAtPath)
 		err := os.Remove(sourceBlob.DataCachedAtPath)
 		if err != nil {

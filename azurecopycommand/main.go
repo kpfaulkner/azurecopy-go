@@ -12,16 +12,6 @@ import (
 	log "github.com/Sirupsen/logrus"
 )
 
-// Commands to execute
-const (
-	CommandCopy = iota
-	CommandList
-	CommandCreateContainer
-	CommandUnknown
-	CommandListContainer
-	CommandCopyBlob
-)
-
 var Version string
 
 func generateSpace(c int) string {
@@ -55,30 +45,30 @@ func printContainer(container *models.SimpleContainer, depth int) {
 // rework when it gets more complex.
 func getCommand(copyCommand bool, listCommand bool, createContainerCommand string, copyBlobCommand bool) int {
 
-	if !copyCommand && !listCommand && createContainerCommand == "" {
+	if !copyCommand && !listCommand && createContainerCommand == "" && !copyBlobCommand {
 		fmt.Println("No command given")
 		os.Exit(1)
 	}
 
 	if copyCommand {
-		return CommandCopy
+		return misc.CommandCopy
 	}
 
 	if copyBlobCommand {
-		return CommandCopyBlob
+		return misc.CommandCopyBlob
 	}
 
 	if listCommand {
-		return CommandList
+		return misc.CommandList
 	}
 
 	if createContainerCommand != "" {
 		log.Debug("createcommand issued")
-		return CommandCreateContainer
+		return misc.CommandCreateContainer
 	}
 
 	log.Fatal("unsure of command to use")
-	return CommandUnknown
+	return misc.CommandUnknown
 }
 
 func setupConfiguration() *misc.CloudConfig {
@@ -130,7 +120,6 @@ func setupConfiguration() *misc.CloudConfig {
 		}
 
 		config.Command = getCommand(*copyCommand, *listCommand, *createContainerCommand, *copyBlobCommand)
-
 		config.Configuration[misc.Source] = *source
 		config.Configuration[misc.Dest] = *dest
 		config.Replace = *replace
@@ -179,21 +168,22 @@ func main() {
 	ac := azurecopy.NewAzureCopy(*config)
 
 	switch config.Command {
-	case CommandCopy:
+	case misc.CommandCopy:
 		err := ac.CopyBlobByURL(config.Replace, false)
 		if err != nil {
 			log.Fatal(err)
 		}
 		break
 
-	case CommandCopyBlob:
+	case misc.CommandCopyBlob:
+		log.Debugf("Using CopyBlob flag")
 		err := ac.CopyBlobByURL(config.Replace, true)
 		if err != nil {
 			log.Fatal(err)
 		}
 		break
 
-	case CommandList:
+	case misc.CommandList:
 		container, err := ac.ListContainer()
 		if err != nil {
 			log.Fatal(err)
@@ -203,13 +193,13 @@ func main() {
 		container.DisplayContainer("")
 		break
 
-	case CommandCreateContainer:
+	case misc.CommandCreateContainer:
 		err := ac.CreateContainer(config.Configuration[misc.CreateContainerName])
 		if err != nil {
 			log.Fatal(err)
 		}
 
-	case CommandUnknown:
+	case misc.CommandUnknown:
 		log.Fatal("Unsure of command to execute")
 	}
 

@@ -393,13 +393,7 @@ func (sh *S3Handler) PopulateBlob(blob *models.SimpleBlob) error {
 		blob.DataCachedAtPath = sh.cacheLocation + "/" + cacheName
 
 		cacheFile, err = os.OpenFile(blob.DataCachedAtPath, os.O_WRONLY|os.O_CREATE, 0666)
-
-		defer func() {
-			log.Debugf("deferring closing of written file")
-			err = cacheFile.Close()
-		}()
-
-		//	defer cacheFile.Close()
+		defer cacheFile.Close()
 
 		if err != nil {
 			log.Fatal(err)
@@ -599,11 +593,12 @@ func (sh *S3Handler) GeneratePresignedURL(blob *models.SimpleBlob) (string, erro
 	log.Debugf("S3:GeneratePresignedURL")
 	s3Container, _ := containerutils.GetContainerAndBlobPrefix(blob.ParentContainer)
 
-	r, _ := sh.s3Client.PutObjectRequest(&s3.PutObjectInput{
+	r, _ := sh.s3Client.GetObjectRequest(&s3.GetObjectInput{
 		Bucket: aws.String(s3Container.Name),
 		Key:    aws.String(blob.BlobCloudName),
 	})
 
+	//r.HTTPRequest.Header.Set("content-type", "application/octet-stream")
 	// r.HTTPRequest.Header.Set("Content-MD5", checksum)
 	url, err := r.Presign(15 * time.Minute)
 	if err != nil {
@@ -611,6 +606,7 @@ func (sh *S3Handler) GeneratePresignedURL(blob *models.SimpleBlob) (string, erro
 		return "", err
 	}
 
+	log.Debugf("presigning with %s and %s", s3Container.Name, blob.BlobCloudName)
 	log.Debugf("presigned URL is %s", url)
 	return url, nil
 }

@@ -176,7 +176,6 @@ func main() {
 		break
 
 	case misc.CommandCopyBlob:
-		log.Debugf("Using CopyBlob flag")
 		err := ac.CopyBlobByURL(config.Replace, true)
 		if err != nil {
 			log.Fatal(err)

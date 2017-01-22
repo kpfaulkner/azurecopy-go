@@ -6,6 +6,7 @@ import (
 	"azurecopy/azurecopy/utils"
 	"azurecopy/azurecopy/utils/azurehelper"
 	"azurecopy/azurecopy/utils/misc"
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -149,7 +150,7 @@ func (ac *AzureCopy) CopySingleBlobByURL(sourceURL string, destURL string, repla
 // First real attempt using GoRoutines for something "real" so will see how it goes.
 func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replaceExisting bool, useCopyBlobFlag bool) error {
 
-	log.Infof("copy from %s to %s", sourceURL, destURL)
+	fmt.Printf("copy from %s to %s\n", sourceURL, destURL)
 
 	deepestContainer, err := ac.sourceHandler.GetSpecificSimpleContainer(sourceURL)
 	if err != nil {
@@ -292,6 +293,7 @@ func (ac *AzureCopy) copyBlobFromChannelUsingCopyBlobFlag(destContainer *models.
 			continue
 		}
 
+		fmt.Printf("Copying %s to %s\n", blob.Name, destContainer.Name+"/"+blob.DestName)
 		azureHelper.DoCopyBlobUsingAzureCopyBlobFlag(url, destContainer, blob.DestName)
 	}
 

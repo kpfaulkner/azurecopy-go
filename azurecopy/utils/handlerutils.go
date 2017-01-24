@@ -38,6 +38,10 @@ func GetHandler(cloudType models.CloudType, isSource bool, config misc.CloudConf
 		sh, _ := handlers.NewS3Handler(accessID, accessSecret, region, isSource, true)
 		return sh
 
+	case models.DropBox:
+		log.Debug("Got Dropbox Handler")
+		dh, _ := handlers.NewDropboxHandler(isSource, true)
+		return dh
 	}
 
 	return nil

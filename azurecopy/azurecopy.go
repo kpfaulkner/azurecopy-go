@@ -68,6 +68,12 @@ func (ac *AzureCopy) getCloudType(url string) (cloudType models.CloudType, isEmu
 		return models.Azure, false
 	}
 
+	// Dropbox
+	match, _ = regexp.MatchString("dropbox.com", lowerURL)
+	if match {
+		return models.DropBox, false
+	}
+
 	// Azure emulator
 	match, _ = regexp.MatchString("127.0.0.1:10000", lowerURL)
 	if match {

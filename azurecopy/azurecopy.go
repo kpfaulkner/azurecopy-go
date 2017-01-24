@@ -4,7 +4,7 @@ import (
 	"azurecopy/azurecopy/handlers"
 	"azurecopy/azurecopy/models"
 	"azurecopy/azurecopy/utils"
-	"azurecopy/azurecopy/utils/azurehelper"
+	"azurecopy/azurecopy/utils/helpers"
 	"azurecopy/azurecopy/utils/misc"
 	"fmt"
 	"regexp"
@@ -282,7 +282,7 @@ func (ac *AzureCopy) copyBlobFromChannelUsingCopyBlobFlag(destContainer *models.
 
 	azureAccountName, azureAccountKey := utils.GetAzureCredentials(false, ac.config)
 
-	azureHelper := azurehelper.NewAzureHelper(azureAccountName, azureAccountKey)
+	azureHelper := helpers.NewAzureHelper(azureAccountName, azureAccountKey)
 
 	for {
 		blob, ok := <-copyChannel

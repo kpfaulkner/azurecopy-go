@@ -2,18 +2,14 @@ package handlers
 
 import (
 	"azurecopy/azurecopy/models"
-	"encoding/json"
+	"azurecopy/azurecopy/utils/helpers"
+
 	"fmt"
 	"io/ioutil"
-	"os"
-	"path"
-	"path/filepath"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/dropbox/dropbox-sdk-go-unofficial/dropbox"
 	"github.com/dropbox/dropbox-sdk-go-unofficial/dropbox/files"
-	"github.com/mitchellh/go-homedir"
-	"golang.org/x/oauth2"
 )
 
 type DropboxHandler struct {
@@ -27,23 +23,7 @@ type DropboxHandler struct {
 	IsSource bool
 }
 
-// Map of map of strings
-// For each domain, we want to save different tokens depending on the
-// command type: personal, team access and team manage
-type TokenMap map[string]map[string]string
-
-var config dropbox.Config
-
-const (
-	configFileName = "azurecopyauth.json"
-	appKey         = "XXX"
-	appSecret      = "XXX"
-	dropboxScheme  = "dropbox"
-
-	tokenPersonal   = "personal"
-	tokenTeamAccess = "teamAccess"
-	tokenTeamManage = "teamManage"
-)
+var config *dropbox.Config
 
 // NewDropboxHandler factory to create new one. Evil?
 func NewDropboxHandler(isSource bool, cacheToDisk bool) (*DropboxHandler, error) {
@@ -58,97 +38,18 @@ func NewDropboxHandler(isSource bool, cacheToDisk bool) (*DropboxHandler, error)
 	dh.cacheLocation = dir
 	dh.IsSource = isSource
 
-	setupConnection()
+	config, err = helpers.SetupConnection()
+	if err != nil {
+		log.Fatalf("Unable to setup dropbox %s", err)
+	}
+
 	return dh, nil
-}
-
-func setupConnection() {
-	conf := oauth2.Config{
-		ClientID:     appKey,
-		ClientSecret: appSecret,
-		Endpoint:     dropbox.OAuthEndpoint(""),
-	}
-
-	dir, err := homedir.Dir()
-	if err != nil {
-		return
-	}
-	filePath := path.Join(dir, ".config", "azurecopy", configFileName)
-	tokType := tokenPersonal
-
-	tokenMap, err := readTokens(filePath)
-	if tokenMap == nil {
-		tokenMap = make(TokenMap)
-	}
-	domain := ""
-
-	if tokenMap[domain] == nil {
-		tokenMap[domain] = make(map[string]string)
-	}
-	tokens := tokenMap[domain]
-
-	if err != nil || tokens[tokType] == "" {
-		fmt.Printf("1. Go to %v\n", conf.AuthCodeURL("state"))
-		fmt.Printf("2. Click \"Allow\" (you might have to log in first).\n")
-		fmt.Printf("3. Copy the authorization code.\n")
-		fmt.Printf("Enter the authorization code here: ")
-
-		var code string
-		if _, err = fmt.Scan(&code); err != nil {
-			return
-		}
-		var token *oauth2.Token
-		token, err = conf.Exchange(oauth2.NoContext, code)
-		if err != nil {
-			return
-		}
-		tokens[tokType] = token.AccessToken
-		writeTokens(filePath, tokenMap)
-	} else {
-		log.Debugf("Already have Dropbox token")
-	}
-
-	config = dropbox.Config{tokens[tokType], true, "", domain}
-}
-
-func readTokens(filePath string) (TokenMap, error) {
-	b, err := ioutil.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	var tokens TokenMap
-	if json.Unmarshal(b, &tokens) != nil {
-		return nil, err
-	}
-
-	return tokens, nil
-}
-
-func writeTokens(filePath string, tokens TokenMap) {
-	// Check if file exists
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		// Doesn't exist; lets create it
-		err = os.MkdirAll(filepath.Dir(filePath), 0700)
-		if err != nil {
-			return
-		}
-	}
-
-	// At this point, file must exist. Lets (over)write it.
-	b, err := json.Marshal(tokens)
-	if err != nil {
-		return
-	}
-	if err = ioutil.WriteFile(filePath, b, 0600); err != nil {
-		return
-	}
 }
 
 // GetRootContainer gets root container of S3. Gets the list of buckets and THOSE are the immediate child containers here.
 func (dh *DropboxHandler) GetRootContainer() models.SimpleContainer {
 	container := models.SimpleContainer{}
-	dbx := files.New(config)
+	dbx := files.New(*config)
 
 	arg := files.NewListFolderArg("")
 
@@ -178,7 +79,7 @@ func (dh *DropboxHandler) GetContainerContentsOverChannel(sourceContainer models
 // GetSpecificSimpleContainer for S3 will be the bucket.
 // Conversion from https://bucketname.s3.amazonaws.com/myblob to https://s3.amazonaws.com/bucketname/myblob is done first.
 func (dh *DropboxHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleContainer, error) {
-	dbx := files.New(config)
+	dbx := files.New(*config)
 
 	arg := files.NewListFolderArg("")
 

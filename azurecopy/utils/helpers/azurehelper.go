@@ -1,4 +1,4 @@
-package azurehelper
+package helpers
 
 import (
 	"azure-sdk-for-go/storage"

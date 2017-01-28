@@ -41,3 +41,19 @@ func GetContainerAndBlobPrefix(container *models.SimpleContainer) (*models.Simpl
 	log.Debugf("Got container: %s , blobprefix: %s", realContainer.Name, blobPrefix)
 	return realContainer, blobPrefix
 }
+
+// GetContainerByName returns an existing container by name OR creates a container, adds it to the parent and returns the new one.
+func GetContainerByName(parentContainer *models.SimpleContainer, containerName string) *models.SimpleContainer {
+
+	for _, container := range parentContainer.ContainerSlice {
+		if container.Name == containerName {
+			return container
+		}
+	}
+
+	container := models.SimpleContainer{}
+	container.Name = containerName
+	container.ParentContainer = parentContainer
+	parentContainer.ContainerSlice = append(parentContainer.ContainerSlice, &container)
+	return &container
+}

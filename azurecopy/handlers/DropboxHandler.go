@@ -2,7 +2,10 @@ package handlers
 
 import (
 	"azurecopy/azurecopy/models"
+	"azurecopy/azurecopy/utils/containerutils"
 	"azurecopy/azurecopy/utils/helpers"
+	"regexp"
+	"strings"
 
 	"fmt"
 	"io/ioutil"
@@ -73,15 +76,25 @@ func (dh *DropboxHandler) BlobExists(container models.SimpleContainer, blobName 
 // at least help each cloud provider be consistent from a dev pov. Think it's worth the overhead. TODO(kpfaulkner) confirm :)
 func (dh *DropboxHandler) GetContainerContentsOverChannel(sourceContainer models.SimpleContainer, blobChannel chan models.SimpleContainer) error {
 
-	return nil
-}
-
-// GetSpecificSimpleContainer for S3 will be the bucket.
-// Conversion from https://bucketname.s3.amazonaws.com/myblob to https://s3.amazonaws.com/bucketname/myblob is done first.
-func (dh *DropboxHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleContainer, error) {
 	dbx := files.New(*config)
 
-	arg := files.NewListFolderArg("")
+	container, prefix := containerutils.GetContainerAndBlobPrefix(&sourceContainer)
+
+	log.Debugf("container name %s", sourceContainer.Name)
+	log.Debugf("prefix %s", prefix)
+
+	var dirArg string
+	if prefix != "" {
+		dirArg = fmt.Sprintf("/%s/%s", container.Name, prefix)
+
+	} else {
+		dirArg = "/" + container.Name
+	}
+
+	log.Debugf("XXXDirArg is %s", dirArg)
+
+	arg := files.NewListFolderArg(dirArg)
+	arg.Recursive = true
 
 	res, err := dbx.ListFolder(arg)
 	if err != nil {
@@ -90,31 +103,247 @@ func (dh *DropboxHandler) GetSpecificSimpleContainer(URL string) (*models.Simple
 
 	log.Debugf("results are %s", res)
 
-	container := models.SimpleContainer{}
+	/*
+		done := false
+		for done == false {
+			// copy of container, dont want to send back ever growing container via the channel.
+			containerClone := *azureContainer
+			blobListResponse, err := ah.blobStorageClient.ListBlobs(containerClone.Name, params)
+			if err != nil {
+				log.Fatal("Error")
+			}
+
+			ah.populateSimpleContainer(blobListResponse, &containerClone)
+
+			// return entire container via channel.
+			blobChannel <- containerClone
+
+			// if marker, then keep going.
+			if blobListResponse.NextMarker != "" {
+				params.Marker = blobListResponse.NextMarker
+			} else {
+				done = true
+			}
+		}
+
+		close(blobChannel)
+		return nil
+	*/
+	/*
+		container := models.SimpleContainer{}
+		processEntries(res, dirArg, &container)
+
+		for res.HasMore {
+			arg := files.NewListFolderContinueArg(res.Cursor)
+
+			res, err = dbx.ListFolderContinue(arg)
+			if err != nil {
+				return nil, err
+			}
+
+			processEntries(res, dirArg, &container)
+		}
+
+		return &container, nil
+	*/
+
+	return nil
+}
+
+// GetSpecificSimpleContainer for S3 will be the bucket.
+// Conversion from https://bucketname.s3.amazonaws.com/myblob to https://s3.amazonaws.com/bucketname/myblob is done first.
+func (dh *DropboxHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleContainer, error) {
+	dbx := files.New(*config)
+
+	dirArg := dh.getDirArg(URL)
+	log.Debugf("DirArg is %s", dirArg)
+
+	arg := files.NewListFolderArg(dirArg)
+
+	// loop manually so we can track parent containers etc!!!!!!!!!!!!! DUH
+	arg.Recursive = true
+
+	res, err := dbx.ListFolder(arg)
+	if err != nil {
+		log.Fatalf("Dropbox::GetRootContainer error %s", err)
+	}
+
+	log.Debugf("results are %+v\n", res)
 
 	for _, i := range res.Entries {
+		log.Debugf("entry is %+v\n", i)
+	}
+
+	container := models.SimpleContainer{}
+	container.Name = "" // getLastSegmentOfPath(dirArg)
+	processEntries(res, dirArg, &container)
+
+	for res.HasMore {
+		arg := files.NewListFolderContinueArg(res.Cursor)
+
+		res, err = dbx.ListFolderContinue(arg)
+		if err != nil {
+			return nil, err
+		}
+
+		processEntries(res, dirArg, &container)
+	}
+
+	return &container, nil
+}
+
+/*
+// populateSimpleContainer for S3 will be the bucket.
+func (dh *DropboxHandler) populateSimpleContainer(path string, containerName string) (*models.SimpleContainer, error) {
+	dbx := files.New(*config)
+
+	arg := files.NewListFolderArg(path)
+
+	// loop manually so we can track parent containers etc!!!!!!!!!!!!! DUH
+	//arg.Recursive = true
+
+	res, err := dbx.ListFolder(arg)
+	if err != nil {
+		log.Fatalf("Dropbox::populateSimpleContainer error %s", err)
+	}
+
+	log.Debugf("results are %s", res)
+
+	container := models.SimpleContainer{}
+	//container.Name = trimContainerName(containerName)
+	//processEntries(res, dirArg, &container)
+
+	for res.HasMore {
+		arg := files.NewListFolderContinueArg(res.Cursor)
+
+		res, err = dbx.ListFolderContinue(arg)
+		if err != nil {
+			return nil, err
+		}
+
+		processEntries(res, dirArg, &container)
+	}
+
+	return &container, nil
+}
+*/
+
+func getLastSegmentOfPath(path string) string {
+
+	log.Debugf("getLastSegmentOfPath %s", path)
+	if strings.HasSuffix(path, "/") {
+		path = strings.TrimSuffix(path, "/")
+	}
+
+	sp := strings.Split(path, "/")
+
+	log.Debugf("split path %s", sp)
+	return sp[len(sp)-1]
+
+}
+
+func trimContainerName(containerName string) string {
+
+	path := containerName
+	if strings.HasPrefix(path, "/") {
+		path = strings.TrimPrefix(path, "/")
+	}
+
+	if strings.HasSuffix(path, "/") {
+		path = strings.TrimSuffix(path, "/")
+	}
+
+	return path
+}
+
+func processEntries(results *files.ListFolderResult, dirArg string, rootContainer *models.SimpleContainer) {
+	for _, i := range results.Entries {
 		log.Debugf("res %s", i)
 		switch f := i.(type) {
 		case *files.FileMetadata:
 			blob := models.SimpleBlob{}
 			blob.Name = f.Name
-			blob.URL = fmt.Sprintf("https://www.dropbox.com/%s", f.Name) // NOT A REAL URL.... do we need it?
+			blob.URL = fmt.Sprintf("https://www.dropbox.com%s", f.PathDisplay) // NOT A REAL URL.... do we need it?
 			blob.Origin = models.DropBox
-			blob.ParentContainer = &container
-			container.BlobSlice = append(container.BlobSlice, &blob)
+
+			// adds to appropriate container. Will create intermediate containers if required.
+			addToContainer(&blob, f.PathDisplay, rootContainer)
+
+			//blob.ParentContainer = container
+			//container.BlobSlice = append(container.BlobSlice, &blob)
 			log.Debugf("FILE %s", f.Name)
-		case *files.FolderMetadata:
-			c := models.SimpleContainer{}
-			c.Name = f.Name
-			c.ParentContainer = &container
-			c.URL = fmt.Sprintf("https://www.dropbox.com/%s", f.Name) // NOT A REAL URL.... do we need it?
-			c.Origin = models.DropBox
-			container.ContainerSlice = append(container.ContainerSlice, &c)
-			log.Debugf("DIR %s", f.Name)
+			log.Debugf("path display %s", f.PathDisplay)
+
+			/*
+				case *files.FolderMetadata:
+					c := models.SimpleContainer{}
+					c.Name = f.Name
+					c.ParentContainer = container
+					c.URL = fmt.Sprintf("https://www.dropbox.com%s", f.PathDisplay) // NOT A REAL URL.... do we need it?
+					c.Origin = models.DropBox
+					container.ContainerSlice = append(container.ContainerSlice, &c)
+					log.Debugf("DIR %s", f.Name) */
+
 		}
 	}
 
-	return &container, nil
+}
+
+// addToContainer adds the blob to the rootContainer but will make appropriate child containers if required.
+func addToContainer(blob *models.SimpleBlob, path string, rootContainer *models.SimpleContainer) {
+
+	sp := strings.Split(path, "/")
+
+	// just 1 length so member of root container.
+	if len(sp) == 1 {
+		rootContainer.BlobSlice = append(rootContainer.BlobSlice, blob)
+		return
+	}
+
+	parentContainer := rootContainer
+
+	for i := 0; i < len(sp)-1; i++ {
+		segment := sp[i]
+		log.Debugf("Container segment :%s:", segment)
+
+		// dont want to add root container... already have it!
+		if segment != "" {
+			container := containerutils.GetContainerByName(parentContainer, segment)
+			parentContainer = container
+		}
+
+	}
+
+	// now add blob to parentContainer
+	parentContainer.BlobSlice = append(parentContainer.BlobSlice, blob)
+}
+
+// getDirArg gets the directory argument for listing contents.
+func (dh *DropboxHandler) getDirArg(URL string) string {
+	lowerURL := strings.ToLower(URL)
+
+	pruneCount := 0
+	match, _ := regexp.MatchString("http://", lowerURL)
+	if match {
+		pruneCount = 7
+	}
+
+	match, _ = regexp.MatchString("https://", lowerURL)
+	if match {
+		pruneCount = 8
+	}
+
+	// trim protocol
+	lowerURL = lowerURL[pruneCount:]
+	sp := strings.Split(lowerURL, "/")
+
+	dirPrefix := "/" + strings.Join(sp[1:], "/")
+
+	if dirPrefix == "/" {
+		return ""
+	}
+
+	return dirPrefix
 }
 
 // GetSpecificSimpleBlob given a URL (NOT ending in /) then get the SIMPLE blob that represents it.
@@ -136,7 +365,7 @@ func (dh *DropboxHandler) ReadBlob(container models.SimpleContainer, blobName st
 
 // PopulateBlob. Used to read a blob IFF we already have a reference to it.
 func (dh *DropboxHandler) PopulateBlob(blob *models.SimpleBlob) error {
-
+	log.Debugf("populateblob %s", blob.Name)
 	return nil
 }
 
@@ -171,9 +400,8 @@ func (dh *DropboxHandler) GetContainer(containerName string) models.SimpleContai
 // Can determine if the SimpleContainer is a real container or something virtual.
 // We need to trace back to the root node and determine what is really a container and
 // what is a blob.
-//
-// For S3 only the children of the root node can be a real azure container. Everything else
-// is a blob or a blob pretending to have vdirs.
+
+// need to populate....   for Dropbox GetSpecificSimpleContainer is doing too much already!
 func (dh *DropboxHandler) GetContainerContents(container *models.SimpleContainer) error {
 
 	return nil

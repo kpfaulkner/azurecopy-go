@@ -278,19 +278,6 @@ func (sh *S3Handler) GetSpecificSimpleContainer(URL string) (*models.SimpleConta
 		log.Fatal("GetSpecificSimpleContainer err", err)
 	}
 
-	/*
-			contents, err := sh.s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
-				Bucket: &containerName,
-				Prefix: &blobPrefix,
-			})
-
-			if err != nil {
-				log.Fatal("GetSpecificSimpleContainer err", err)
-			}
-
-		log.Printf("contents %s", contents)
-	*/
-
 	container, err := sh.getS3Bucket(containerName)
 	if err != nil {
 		log.Fatal(err)

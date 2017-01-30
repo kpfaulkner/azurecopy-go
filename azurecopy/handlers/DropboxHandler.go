@@ -204,29 +204,33 @@ func (dh *DropboxHandler) GetSpecificSimpleContainer(URL string) (*models.Simple
 // the root, temp and dir1 parent containers and just return the dir2 container.
 func filterContainer(rootContainer *models.SimpleContainer, dirArg string) (*models.SimpleContainer, error) {
 
+	log.Debugf("filter container %s", dirArg)
 	sp := strings.Split(dirArg, "/")
 
 	container := rootContainer
 	for _, dir := range sp {
+		if dir != "" {
+			log.Debugf("checking %s", dir)
+			var childContainer *models.SimpleContainer
 
-		var childContainer *models.SimpleContainer
+			foundChild := false
+			// check children.
+			for _, childContainer = range container.ContainerSlice {
+				if childContainer.Name == dir {
+					// found what we want.
+					foundChild = true
+					break
+				}
+			}
 
-		foundChild := false
-		// check children.
-		for _, childContainer = range container.ContainerSlice {
-			if childContainer.Name == dir {
-				// found what we want.
-				foundChild = true
-				break
+			if foundChild {
+				container = childContainer
+			} else {
+				// haven't found what we want. Return error
+				return nil, errors.New("Unable to find container")
 			}
 		}
 
-		if foundChild {
-			container = childContainer
-		} else {
-			// haven't found what we want. Return error
-			return nil, errors.New("Unable to find container")
-		}
 	}
 
 	return container, nil

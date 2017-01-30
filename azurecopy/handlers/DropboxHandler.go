@@ -4,6 +4,7 @@ import (
 	"azurecopy/azurecopy/models"
 	"azurecopy/azurecopy/utils/containerutils"
 	"azurecopy/azurecopy/utils/helpers"
+	"errors"
 	"regexp"
 	"strings"
 
@@ -150,8 +151,7 @@ func (dh *DropboxHandler) GetContainerContentsOverChannel(sourceContainer models
 	return nil
 }
 
-// GetSpecificSimpleContainer for S3 will be the bucket.
-// Conversion from https://bucketname.s3.amazonaws.com/myblob to https://s3.amazonaws.com/bucketname/myblob is done first.
+// GetSpecificSimpleContainer gets a specific dropbox directory/container
 func (dh *DropboxHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleContainer, error) {
 	dbx := files.New(*config)
 
@@ -189,7 +189,48 @@ func (dh *DropboxHandler) GetSpecificSimpleContainer(URL string) (*models.Simple
 		processEntries(res, dirArg, &container)
 	}
 
-	return &container, nil
+	// get the container we're actually after.
+	wantedContainer, err := filterContainer(&container, dirArg)
+	if err != nil {
+		return nil, err
+	}
+	return wantedContainer, nil
+}
+
+// filterContainer gets the container we're after by checking dirArg  and pruning off the parent
+// containers we're not after.
+//
+// ie rootContainer is literally the root, but maybe we were after /temp/dir1/dir2/  so we prune off
+// the root, temp and dir1 parent containers and just return the dir2 container.
+func filterContainer(rootContainer *models.SimpleContainer, dirArg string) (*models.SimpleContainer, error) {
+
+	sp := strings.Split(dirArg, "/")
+
+	container := rootContainer
+	for _, dir := range sp {
+
+		var childContainer *models.SimpleContainer
+
+		foundChild := false
+		// check children.
+		for _, childContainer = range container.ContainerSlice {
+			if childContainer.Name == dir {
+				// found what we want.
+				foundChild = true
+				break
+			}
+		}
+
+		if foundChild {
+			container = childContainer
+		} else {
+			// haven't found what we want. Return error
+			return nil, errors.New("Unable to find container")
+		}
+	}
+
+	return container, nil
+
 }
 
 /*

@@ -326,7 +326,7 @@ func (ah *AzureHandler) PopulateBlob(blob *models.SimpleBlob) error {
 		defer cacheFile.Close()
 
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("Populate blob %s", err)
 			return err
 		}
 	} else {

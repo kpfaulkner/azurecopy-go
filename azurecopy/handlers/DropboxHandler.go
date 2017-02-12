@@ -54,7 +54,6 @@ func NewDropboxHandler(isSource bool, cacheToDisk bool) (*DropboxHandler, error)
 func (dh *DropboxHandler) GetRootContainer() models.SimpleContainer {
 	container := models.SimpleContainer{}
 	dbx := files.New(*config)
-
 	arg := files.NewListFolderArg("")
 
 	res, err := dbx.ListFolder(arg)
@@ -92,8 +91,6 @@ func (dh *DropboxHandler) GetContainerContentsOverChannel(sourceContainer models
 		dirArg = "/" + container.Name
 	}
 
-	log.Debugf("XXXDirArg is %s", dirArg)
-
 	arg := files.NewListFolderArg(dirArg)
 	arg.Recursive = true
 
@@ -102,7 +99,22 @@ func (dh *DropboxHandler) GetContainerContentsOverChannel(sourceContainer models
 		log.Fatalf("Dropbox::GetRootContainer error %s", err)
 	}
 
-	log.Debugf("results are %s", res)
+	containerClone := sourceContainer
+	processEntries(res, dirArg, &containerClone)
+	blobChannel <- containerClone
+
+	for res.HasMore {
+		arg := files.NewListFolderContinueArg(res.Cursor)
+
+		res, err = dbx.ListFolderContinue(arg)
+		if err != nil {
+			return err
+		}
+		containerClone := sourceContainer
+		processEntries(res, dirArg, &containerClone)
+		blobChannel <- containerClone
+
+	}
 
 	/*
 		done := false
@@ -237,41 +249,102 @@ func filterContainer(rootContainer *models.SimpleContainer, dirArg string) (*mod
 
 }
 
+// populateSimpleContainer takes a list of Azure blobs and breaks them into virtual directories (SimpleContainers) and
+// SimpleBlob trees.
+//
+// vdir1/vdir2/blob1
+// vdir1/blob2
+// vdir1/vdir3/blob3
+// blob4
+
 /*
-// populateSimpleContainer for S3 will be the bucket.
-func (dh *DropboxHandler) populateSimpleContainer(path string, containerName string) (*models.SimpleContainer, error) {
-	dbx := files.New(*config)
+func (dh *DropboxHandler) populateSimpleContainer(results *ListFolderResult, container *models.SimpleContainer) {
 
-	arg := files.NewListFolderArg(path)
+	for _, i := range results.Entries {
+		log.Debugf("res %s", i)
+		switch f := i.(type) {
+		case *files.FileMetadata:
+			blob := models.SimpleBlob{}
+			blob.Name = f.Name
+			blob.URL = fmt.Sprintf("https://www.dropbox.com%s", f.PathDisplay) // NOT A REAL URL.... do we need it?
+			blob.Origin = models.DropBox
 
-	// loop manually so we can track parent containers etc!!!!!!!!!!!!! DUH
-	//arg.Recursive = true
+			// adds to appropriate container. Will create intermediate containers if required.
+			addToContainer(&blob, f.PathDisplay, rootContainer)
 
-	res, err := dbx.ListFolder(arg)
-	if err != nil {
-		log.Fatalf("Dropbox::populateSimpleContainer error %s", err)
-	}
+			//blob.ParentContainer = container
+			//container.BlobSlice = append(container.BlobSlice, &blob)
+			log.Debugf("FILE %s", f.Name)
+			log.Debugf("path display %s", f.PathDisplay)
 
-	log.Debugf("results are %s", res)
 
-	container := models.SimpleContainer{}
-	//container.Name = trimContainerName(containerName)
-	//processEntries(res, dirArg, &container)
-
-	for res.HasMore {
-		arg := files.NewListFolderContinueArg(res.Cursor)
-
-		res, err = dbx.ListFolderContinue(arg)
-		if err != nil {
-			return nil, err
 		}
-
-		processEntries(res, dirArg, &container)
 	}
 
-	return &container, nil
+	for _, blob := range blobListResponse.Blobs {
+
+		sp := strings.Split(blob.Name, "/")
+
+		// if no / then no subdirs etc. Just add as is.
+		if len(sp) == 1 {
+			b := models.SimpleBlob{}
+			b.Name = blob.Name
+			b.Origin = container.Origin
+			b.ParentContainer = container
+			b.BlobCloudName = blob.Name
+			// add to the blob slice within the container
+			container.BlobSlice = append(container.BlobSlice, &b)
+		} else {
+
+			currentContainer := container
+			// if slashes, then split into chunks and create accordingly.
+			// skip last one since thats the blob name.
+			spShort := sp[0 : len(sp)-1]
+			for _, segment := range spShort {
+
+				// check if container already has a subcontainer with appropriate name
+				subContainer := dh.getSubContainer(currentContainer, segment)
+
+				if subContainer != nil {
+					// then we have a blob so add it to currentContainer
+					currentContainer = subContainer
+				}
+			}
+
+			b := models.SimpleBlob{}
+			b.Name = sp[len(sp)-1]
+			b.Origin = container.Origin
+			b.ParentContainer = container
+			b.BlobCloudName = blob.Name // cloud specific name... ie the REAL name.
+			b.URL = ""                  // unsure of URL
+			currentContainer.BlobSlice = append(currentContainer.BlobSlice, &b)
+			currentContainer.Populated = true
+
+		}
+	}
+	container.Populated = true
 }
 */
+
+// getSubContainer gets an existing subcontainer with parent of container and name of segment.
+// otherwise it creates it, adds it to the parent container and returns the new one.
+func (dh *DropboxHandler) getSubContainer(container *models.SimpleContainer, segment string) *models.SimpleContainer {
+
+	// MUST be a shorthand way of doing this. But still crawling in GO.
+	for _, c := range container.ContainerSlice {
+		if c.Name == segment {
+			return c
+		}
+	}
+
+	// create a new one.
+	newContainer := models.SimpleContainer{}
+	newContainer.Name = segment
+	newContainer.Origin = container.Origin
+	newContainer.ParentContainer = container
+	container.ContainerSlice = append(container.ContainerSlice, &newContainer)
+	return &newContainer
+}
 
 func getLastSegmentOfPath(path string) string {
 
@@ -308,7 +381,8 @@ func processEntries(results *files.ListFolderResult, dirArg string, rootContaine
 		case *files.FileMetadata:
 			blob := models.SimpleBlob{}
 			blob.Name = f.Name
-			blob.URL = fmt.Sprintf("https://www.dropbox.com%s", f.PathDisplay) // NOT A REAL URL.... do we need it?
+			//blob.URL = fmt.Sprintf("https://www.dropbox.com%s", f.PathDisplay) // NOT A REAL URL.... do we need it?
+			blob.URL = f.PathDisplay // NOT A REAL URL.... do we need it?
 			blob.Origin = models.DropBox
 
 			// adds to appropriate container. Will create intermediate containers if required.
@@ -411,6 +485,19 @@ func (dh *DropboxHandler) ReadBlob(container models.SimpleContainer, blobName st
 // PopulateBlob. Used to read a blob IFF we already have a reference to it.
 func (dh *DropboxHandler) PopulateBlob(blob *models.SimpleBlob) error {
 	log.Debugf("populateblob %s", blob.Name)
+
+	dbx := files.New(*config)
+	arg := files.NewDownloadArg(blob.URL)
+
+	res, contents, err := dbx.Download(arg)
+	if err != nil {
+		log.Errorf("Cannot download blob %s, %s", blob.URL, err)
+		return err
+	}
+
+	log.Debugf("res %s", res)
+	log.Debugf("contents %s", contents)
+
 	return nil
 }
 

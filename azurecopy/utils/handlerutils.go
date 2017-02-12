@@ -4,6 +4,8 @@ import (
 	"azurecopy/azurecopy/handlers"
 	"azurecopy/azurecopy/models"
 	"azurecopy/azurecopy/utils/misc"
+	"io"
+	"os"
 
 	log "github.com/Sirupsen/logrus"
 )
@@ -82,4 +84,56 @@ func getS3Credentials(isSource bool, config misc.CloudConfig) (accessID string, 
 	}
 
 	return accessID, accessSecret, region
+}
+
+func readBlob(reader io.ReadCloser, blob *models.SimpleBlob, cacheToDisk bool, cacheLocation string) error {
+	// file stream for cache.
+	var cacheFile *os.File
+
+	// populate this to disk.
+	if cacheToDisk {
+
+		cacheName := misc.GenerateCacheName(blob.BlobCloudName)
+		blob.DataCachedAtPath = cacheLocation + "/" + cacheName
+		log.Debugf("cache location is %s", blob.DataCachedAtPath)
+		cacheFile, err := os.OpenFile(blob.DataCachedAtPath, os.O_WRONLY|os.O_CREATE, 0666)
+		defer cacheFile.Close()
+
+		if err != nil {
+			log.Fatalf("Populate blob %s", err)
+			return err
+		}
+	} else {
+		blob.DataInMemory = []byte{}
+	}
+
+	// 100k buffer... way too small?
+	buffer := make([]byte, 1024*100)
+	finishedProcessing := false
+	for finishedProcessing == false {
+		numBytesRead, err := reader.Read(buffer)
+		if err != nil {
+			finishedProcessing = true
+		}
+
+		if numBytesRead <= 0 {
+			finishedProcessing = true
+			continue
+		}
+
+		// if we're caching, write to a file.
+		if cacheToDisk {
+			_, err := cacheFile.Write(buffer[:numBytesRead])
+			if err != nil {
+				log.Fatal(err)
+				return err
+			}
+		} else {
+
+			// needs to go into a byte array. How do we expand a slice again?
+			blob.DataInMemory = append(blob.DataInMemory, buffer[:numBytesRead]...)
+		}
+	}
+
+	return nil
 }

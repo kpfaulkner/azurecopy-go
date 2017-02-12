@@ -231,7 +231,7 @@ func (ac *AzureCopy) populateCopyChannel(sourceContainer *models.SimpleContainer
 			blob.DestName = blob.Name
 		}
 
-		log.Debugf("Adding blob %s to channel", blob.Name)
+		log.Debugf("Adding blob %s to channel", blob.URL)
 		copyChannel <- *blob
 	}
 
@@ -261,10 +261,12 @@ func (ac *AzureCopy) copyBlobFromChannel(destContainer *models.SimpleContainer, 
 	for {
 		blob, ok := <-copyChannel
 		if !ok {
+			log.Debugf("Closing channel for copyBlobFromChannel")
 			// closed...   so all writing is done?  Or what?
 			return
 		}
 
+		log.Debugf("Read blob %s", blob.URL)
 		ac.ReadBlob(&blob)
 
 		// rename name for destination. HACK!
@@ -342,6 +344,7 @@ func (ac *AzureCopy) GetDestContainerContents(container *models.SimpleContainer)
 // (or in the special case of azure copyblob flag it will do something tricky, once I get to that part)
 func (ac *AzureCopy) ReadBlob(blob *models.SimpleBlob) {
 
+	log.Debugf("ReadBlob %s", blob.URL)
 	err := ac.sourceHandler.PopulateBlob(blob)
 
 	if err != nil {

@@ -13,7 +13,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	"github.com/Azure/azure-sdk-for-go/storage"
+	"github.com/Azure/azure-storage-go"
 )
 
 type AzureHandler struct {
@@ -321,7 +321,7 @@ func (ah *AzureHandler) PopulateBlob(blob *models.SimpleBlob) error {
 
 		cacheName := misc.GenerateCacheName(azureContainerName + blob.BlobCloudName)
 		blob.DataCachedAtPath = ah.cacheLocation + "/" + cacheName
-		log.Debugf("cache location is %s", blob.DataCachedAtPath)
+		log.Debugf("azure cache location is %s", blob.DataCachedAtPath)
 		cacheFile, err = os.OpenFile(blob.DataCachedAtPath, os.O_WRONLY|os.O_CREATE, 0666)
 		defer cacheFile.Close()
 

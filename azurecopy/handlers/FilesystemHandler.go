@@ -8,7 +8,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/Azure/azure-sdk-for-go/storage"
+	"github.com/Azure/azure-storage-go"
 	log "github.com/Sirupsen/logrus"
 )
 

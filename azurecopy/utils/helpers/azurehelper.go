@@ -1,7 +1,7 @@
 package helpers
 
 import (
-	"azure-sdk-for-go/storage"
+	"azure-storage-go"
 	"azurecopy/azurecopy/models"
 	"azurecopy/azurecopy/utils/containerutils"
 

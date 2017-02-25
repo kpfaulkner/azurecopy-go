@@ -2,14 +2,14 @@ package handlers
 
 import (
 	"azurecopy/azurecopy/models"
+	"azurecopy/azurecopy/utils/blobutils"
 	"azurecopy/azurecopy/utils/containerutils"
 	"azurecopy/azurecopy/utils/helpers"
 	"errors"
-	"regexp"
-	"strings"
-
 	"fmt"
 	"io/ioutil"
+	"regexp"
+	"strings"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/dropbox/dropbox-sdk-go-unofficial/dropbox"
@@ -491,12 +491,18 @@ func (dh *DropboxHandler) PopulateBlob(blob *models.SimpleBlob) error {
 
 	res, contents, err := dbx.Download(arg)
 	if err != nil {
-		log.Errorf("Cannot download blob %s, %s", blob.URL, err)
+		log.Errorf("DB Cannot download blob %s, %s", blob.URL, err)
 		return err
 	}
 
 	log.Debugf("res %s", res)
 	log.Debugf("contents %s", contents)
+
+	err = blobutils.ReadBlob(contents, blob, dh.cacheToDisk, dh.cacheLocation)
+	if err != nil {
+		log.Errorf("Error reading Dropbox blob %s", err)
+		return err
+	}
 
 	return nil
 }

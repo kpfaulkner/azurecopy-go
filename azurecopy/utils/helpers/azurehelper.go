@@ -34,10 +34,12 @@ func (ah *AzureHelper) DoCopyBlobUsingAzureCopyBlobFlag(url string, destContaine
 	// need to get real azure container but I *think* destBlobName has already been correctly converted.
 	// need to check that! TODO(kpfaulkner)
 
-	container, _ := containerutils.GetContainerAndBlobPrefix(destContainer)
+	container, prefix := containerutils.GetContainerAndBlobPrefix(destContainer)
 
-	log.Debugf("CopyBlob: source %s : dest container %s : blobname %s", url, container.Name, destBlobName)
-	err := ah.client.CopyBlob(container.Name, destBlobName, url)
+	destBlobNameWithPrefix := prefix + destBlobName
+	log.Debugf("CopyBlob: source %s : dest container %s : blobname %s : prefix %s : fullDestname %s", url, container.Name, destBlobName, prefix, destBlobNameWithPrefix)
+
+	err := ah.client.CopyBlob(container.Name, destBlobNameWithPrefix, url)
 	if err != nil {
 		log.Errorf("Unable to copy %s %s", url, err)
 	}

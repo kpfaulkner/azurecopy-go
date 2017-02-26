@@ -410,7 +410,12 @@ func (ah *AzureHandler) getContainerAndBlobNames(destContainer *models.SimpleCon
 	var azureBlobName string
 
 	if blobPrefix != "" {
-		azureBlobName = blobPrefix + "/" + sourceBlobName
+		if misc.GetLastChar(blobPrefix) == "/" {
+			azureBlobName = blobPrefix + sourceBlobName
+
+		} else {
+			azureBlobName = blobPrefix + "/" + sourceBlobName
+		}
 	} else {
 		azureBlobName = sourceBlobName
 	}
@@ -427,6 +432,7 @@ func (ah *AzureHandler) writeBlobFromCache(destContainer *models.SimpleContainer
 		return err
 	}
 
+	log.Debugf("writeBlobFromCache container: %s blob: %s", azureContainerName, azureBlobName)
 	// file stream for cache.
 	var cacheFile *os.File
 
@@ -462,7 +468,7 @@ func (ah *AzureHandler) writeBlobFromCache(destContainer *models.SimpleContainer
 	}
 
 	// finialize the blob
-	err = ah.putBlockIDList(destContainer.Name, sourceBlob.Name, blockIDList)
+	err = ah.putBlockIDList(azureContainerName, azureBlobName, blockIDList)
 	if err != nil {
 		log.Fatal("putBlockIDList failed ", err)
 	}
@@ -517,6 +523,7 @@ func (ah *AzureHandler) writeBlobFromMemory(destContainer *models.SimpleContaine
 
 func (ah *AzureHandler) putBlockIDList(containerName string, blobName string, blockIDList []string) error {
 
+	log.Debugf("putBlockIDList container %s: blobName %s", containerName, blobName)
 	blockSlice := ah.generateBlockSlice(blockIDList)
 	if err := ah.blobStorageClient.PutBlockList(containerName, blobName, blockSlice); err != nil {
 		log.Fatal("putBlockIDList failed ", err)

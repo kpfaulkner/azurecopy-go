@@ -513,7 +513,7 @@ func (ah *AzureHandler) writeBlobFromMemory(destContainer *models.SimpleContaine
 	}
 
 	// finialize the blob
-	err = ah.putBlockIDList(destContainer.Name, sourceBlob.Name, blockIDList)
+	err = ah.putBlockIDList(azureContainerName, azureBlobName, blockIDList)
 	if err != nil {
 		log.Fatal("putBlockIDList failed ", err)
 	}

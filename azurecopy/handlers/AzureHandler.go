@@ -133,7 +133,8 @@ func (ah *AzureHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleCo
 
 		log.Debugf("container %s didn't exist, trying to create it: %s", containerName, err)
 		// cant get container, create it.
-		err = ah.blobStorageClient.CreateContainer(containerName, storage.ContainerAccessTypeBlob)
+		azureContainer := ah.blobStorageClient.GetContainerReference(containerName)
+		_, err := azureContainer.CreateIfNotExists()
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -165,7 +166,8 @@ func (ah *AzureHandler) GetContainerContentsOverChannel(sourceContainer models.S
 	for done == false {
 		// copy of container, dont want to send back ever growing container via the channel.
 		containerClone := *azureContainer
-		blobListResponse, err := ah.blobStorageClient.ListBlobs(containerClone.Name, params)
+		azureContainer := ah.blobStorageClient.GetContainerReference(containerClone.Name)
+		blobListResponse, err := azureContainer.ListBlobs(params)
 		if err != nil {
 			log.Fatal("Error")
 		}
@@ -426,7 +428,9 @@ func (ah *AzureHandler) getContainerAndBlobNames(destContainer *models.SimpleCon
 // writeBlobFromCache.. read the cache file and pass the byte slice onto the real writer.
 func (ah *AzureHandler) writeBlobFromCache(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
 	azureContainerName, azureBlobName := ah.getContainerAndBlobNames(destContainer, sourceBlob.Name)
-	_, err := ah.blobStorageClient.CreateContainerIfNotExists(azureContainerName, storage.ContainerAccessTypePrivate)
+
+	containerReference := ah.blobStorageClient.GetContainerReference(azureContainerName)
+	_, err := containerReference.CreateIfNotExists()
 	if err != nil {
 		log.Fatal(err)
 		return err
@@ -479,7 +483,8 @@ func (ah *AzureHandler) writeBlobFromCache(destContainer *models.SimpleContainer
 func (ah *AzureHandler) writeBlobFromMemory(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
 
 	azureContainerName, azureBlobName := ah.getContainerAndBlobNames(destContainer, sourceBlob.Name)
-	_, err := ah.blobStorageClient.CreateContainerIfNotExists(azureContainerName, storage.ContainerAccessTypePrivate)
+	containerRef := ah.blobStorageClient.GetContainerReference(azureContainerName)
+	_, err := containerRef.CreateIfNotExists()
 	if err != nil {
 		log.Fatal(err)
 		return err
@@ -567,7 +572,8 @@ func (ah *AzureHandler) writeMemoryToBlob(containerName string, blobName string,
 func (ah *AzureHandler) CreateContainer(containerName string) (models.SimpleContainer, error) {
 	var container models.SimpleContainer
 
-	err := ah.blobStorageClient.CreateContainer(containerName, storage.ContainerAccessTypeBlob)
+	containerRef := ah.blobStorageClient.GetContainerReference(containerName)
+	err := containerRef.Create()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -598,8 +604,9 @@ func (ah *AzureHandler) GetContainerContents(container *models.SimpleContainer) 
 	// now we have the azure container and the prefix, we should be able to get a list of
 	// SimpleContainers and SimpleBlobs to add this to original container.
 	params := storage.ListBlobsParameters{Prefix: blobPrefix}
+	containerRef := ah.blobStorageClient.GetContainerReference(azureContainer.Name)
 
-	blobListResponse, err := ah.blobStorageClient.ListBlobs(azureContainer.Name, params)
+	blobListResponse, err := containerRef.ListBlobs(params)
 	if err != nil {
 		log.Fatal("Error")
 	}

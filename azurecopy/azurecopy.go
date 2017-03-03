@@ -119,6 +119,7 @@ func (ac *AzureCopy) CreateContainer(containerName string) error {
 // CopyBlobByURL copy a blob from one URL to another.
 func (ac *AzureCopy) CopyBlobByURL(replaceExisting bool, useCopyBlobFlag bool) error {
 
+	log.Debugf("CopyBlobByURL sourceURL %s", ac.sourceURL)
 	var err error
 	if misc.GetLastChar(ac.sourceURL) == "/" || misc.GetLastChar(ac.sourceURL) == "\\" {
 		// copying a directory/vdir worth of stuff....
@@ -136,6 +137,7 @@ func (ac *AzureCopy) CopyBlobByURL(replaceExisting bool, useCopyBlobFlag bool) e
 // CopySingleBlobByURL copies a single blob referenced by URL to a destination URL
 // useCopyBlobFlag currently unused!! TODO(kpfaulkner)
 func (ac *AzureCopy) CopySingleBlobByURL(sourceURL string, destURL string, replaceExisting bool, useCopyBlobFlag bool) error {
+	fmt.Printf("Copying single blob %s to %s", sourceURL, destURL)
 
 	deepestContainer, err := ac.sourceHandler.GetSpecificSimpleContainer(sourceURL)
 	if err != nil {

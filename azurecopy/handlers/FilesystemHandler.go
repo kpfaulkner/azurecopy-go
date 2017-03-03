@@ -34,10 +34,12 @@ type FilesystemHandler struct {
 // assumes using WRONG format. Hmmm will this be cross platform?
 func generateBasePath(rootContainerPath string) (string, string) {
 
+	log.Debugf("rootContainerPath %s", rootContainerPath)
 	if rootContainerPath != "" {
 		var sp = strings.Split(rootContainerPath, string(os.PathSeparator))
 		l := len(sp)
 
+		log.Debugf("sp is %s", sp)
 		genPath := strings.Join(sp[:l-2], string(os.PathSeparator)) + string(os.PathSeparator)
 		container := sp[l-2]
 

@@ -268,6 +268,20 @@ func (ac *AzureCopy) copyBlobFromChannel(destContainer *models.SimpleContainer, 
 			return
 		}
 
+		// check if we need to skip it.
+		if !replaceExisting {
+			exists, err := ac.destHandler.BlobExists(*destContainer, blob.DestName)
+			if err != nil {
+				log.Debugf("Unable to copy %s", blob.URL)
+				continue
+			}
+
+			if exists {
+				fmt.Printf("Skipping %s", blob.URL)
+				continue
+			}
+		}
+
 		log.Debugf("Read blob %s", blob.URL)
 		ac.ReadBlob(&blob)
 

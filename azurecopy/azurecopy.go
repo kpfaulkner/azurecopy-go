@@ -309,8 +309,21 @@ func (ac *AzureCopy) copyBlobFromChannelUsingCopyBlobFlag(destContainer *models.
 			return
 		}
 
+		// check if we need to skip it.
+		if !replaceExisting {
+			exists, err := ac.destHandler.BlobExists(*destContainer, blob.DestName)
+			if err != nil {
+				log.Debugf("Unable to copy %s", blob.URL)
+				continue
+			}
+
+			if exists {
+				fmt.Printf("Skipping %s", blob.URL)
+				continue
+			}
+		}
+
 		// generate presigned URL
-		// ac.ReadBlob(&blob)
 		url, err := ac.sourceHandler.GeneratePresignedURL(&blob)
 		if err != nil {
 			log.Errorf("Unable to generate presigned URL %s", blob.URL)

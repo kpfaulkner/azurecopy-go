@@ -46,7 +46,7 @@ func ReadBlob(reader io.ReadCloser, blob *models.SimpleBlob, cacheToDisk bool, c
 			continue
 		}
 
-		log.Debugf("bytes %s", buffer)
+		//log.Debugf("bytes %s", buffer)
 		log.Debugf("number of bytes read %d", numBytesRead)
 		// if we're caching, write to a file.
 		if cacheToDisk {

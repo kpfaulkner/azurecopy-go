@@ -1,9 +1,10 @@
 package helpers
 
 import (
-	"azure-storage-go"
 	"azurecopy/azurecopy/models"
 	"azurecopy/azurecopy/utils/containerutils"
+
+	"github.com/Azure/azure-storage-go"
 
 	log "github.com/Sirupsen/logrus"
 )

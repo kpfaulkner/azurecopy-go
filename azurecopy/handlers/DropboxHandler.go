@@ -113,7 +113,6 @@ func (dh *DropboxHandler) GetContainerContentsOverChannel(sourceContainer models
 		containerClone := sourceContainer
 		processEntries(res, dirArg, &containerClone)
 		blobChannel <- containerClone
-
 	}
 
 	/*
@@ -376,9 +375,11 @@ func trimContainerName(containerName string) string {
 
 func processEntries(results *files.ListFolderResult, dirArg string, rootContainer *models.SimpleContainer) {
 	for _, i := range results.Entries {
-		log.Debugf("res %s", i)
+		log.Debugf("DB res %s", i)
 		switch f := i.(type) {
 		case *files.FileMetadata:
+
+			log.Debugf("DB is file %s", i)
 			blob := models.SimpleBlob{}
 			blob.Name = f.Name
 			//blob.URL = fmt.Sprintf("https://www.dropbox.com%s", f.PathDisplay) // NOT A REAL URL.... do we need it?
@@ -488,7 +489,7 @@ func (dh *DropboxHandler) PopulateBlob(blob *models.SimpleBlob) error {
 
 	dbx := files.New(*config)
 	arg := files.NewDownloadArg(blob.URL)
-
+	log.Debugf("DB URL to download %s", blob.URL)
 	res, contents, err := dbx.Download(arg)
 	if err != nil {
 		log.Errorf("DB Cannot download blob %s, %s", blob.URL, err)

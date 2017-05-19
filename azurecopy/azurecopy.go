@@ -137,7 +137,7 @@ func (ac *AzureCopy) CopyBlobByURL(replaceExisting bool, useCopyBlobFlag bool) e
 // CopySingleBlobByURL copies a single blob referenced by URL to a destination URL
 // useCopyBlobFlag currently unused!! TODO(kpfaulkner)
 func (ac *AzureCopy) CopySingleBlobByURL(sourceURL string, destURL string, replaceExisting bool, useCopyBlobFlag bool) error {
-	fmt.Printf("Copying single blob %s to %s", sourceURL, destURL)
+	fmt.Printf("Copying single blob %s to %s\n", sourceURL, destURL)
 
 	deepestContainer, err := ac.sourceHandler.GetSpecificSimpleContainer(sourceURL)
 	if err != nil {
@@ -224,6 +224,7 @@ func (ac *AzureCopy) launchCopyGoRoutines(destContainer *models.SimpleContainer,
 // populateCopyChannel copies blobs into channel for later copying.
 func (ac *AzureCopy) populateCopyChannel(sourceContainer *models.SimpleContainer, prefix string, copyChannel chan models.SimpleBlob) error {
 
+	log.Debugf("sourcecontainer blobslice size %d", len(sourceContainer.BlobSlice))
 	// copy all blobs
 	for _, blob := range sourceContainer.BlobSlice {
 
@@ -237,8 +238,12 @@ func (ac *AzureCopy) populateCopyChannel(sourceContainer *models.SimpleContainer
 		copyChannel <- *blob
 	}
 
+	log.Debugf("DB populateCopyChannel name %s", sourceContainer.Name)
+	log.Debugf("populateCopyChannel containerSlice size %d", len(sourceContainer.ContainerSlice))
+
 	// call for each sub container.
 	for _, container := range sourceContainer.ContainerSlice {
+		log.Debugf("container name is %s", container.Name)
 		var newPrefix string
 		if prefix != "" {
 			newPrefix = prefix + "/" + container.Name

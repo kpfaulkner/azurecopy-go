@@ -16,8 +16,8 @@ import (
 
 const (
 	configFileName = "azurecopyauth.json"
-	appKey         = "XXX"
-	appSecret      = "XXX"
+	appKey         = "iq11ew8vur0c5x7"
+	appSecret      = "p3rm8w02t1ru048"
 	dropboxScheme  = "dropbox"
 
 	tokenPersonal   = "personal"

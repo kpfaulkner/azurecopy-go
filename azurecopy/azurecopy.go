@@ -139,14 +139,29 @@ func (ac *AzureCopy) CopyBlobByURL(replaceExisting bool, useCopyBlobFlag bool) e
 func (ac *AzureCopy) CopySingleBlobByURL(sourceURL string, destURL string, replaceExisting bool, useCopyBlobFlag bool) error {
 	fmt.Printf("Copying single blob %s to %s\n", sourceURL, destURL)
 
-	deepestContainer, err := ac.sourceHandler.GetSpecificSimpleContainer(sourceURL)
+	simpleSourceBlob, err := ac.sourceHandler.GetSpecificSimpleBlob(sourceURL)
 	if err != nil {
 		return err
 	}
 
-	// get the blobs for the deepest vdir which is part of the URL.
-	ac.sourceHandler.GetContainerContents(deepestContainer)
+	fmt.Printf("single blob is %v", simpleSourceBlob)
+	destContainer, err := ac.destHandler.GetSpecificSimpleContainer(destURL)
+	if err != nil {
+		return err
+	}
 
+	copyChannel := make(chan models.SimpleBlob, 1)
+
+	copyChannel <- *simpleSourceBlob
+
+	// launch go routines for copying.
+	ac.launchCopyGoRoutines(destContainer, replaceExisting, copyChannel, useCopyBlobFlag)
+
+	// finished copying contents to channel. Close now?
+	close(copyChannel)
+
+	// wait for all copying to be done.
+	wg.Wait()
 	return nil
 }
 

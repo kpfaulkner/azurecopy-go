@@ -6,6 +6,7 @@ import (
 	"azurecopy/azurecopy/utils/misc"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"regexp"
@@ -242,14 +243,44 @@ func (ah *AzureHandler) getAzureContainer(containerName string) (*models.SimpleC
 
 }
 
-// GetSpecificSimpleBlob given a URL (NOT ending in /) then get the SIMPLE blob that represents it.
+// getContainerAndBlobNameFromURL returns Azure container and blob names.
+// Format of URL assumed to be https://account.blob.core.windows.net/container/blobname
+func (ah *AzureHandler) getContainerAndBlobNameFromURL(url string) (string, string, error) {
+
+	sp := strings.Split(url, "/")
+	containerName := sp[3]
+	blobName := strings.Join(sp[4:], "/")
+	return containerName, blobName, nil
+}
+
+// GetSpecificSimpleBlob....  returns a single blob
 func (ah *AzureHandler) GetSpecificSimpleBlob(URL string) (*models.SimpleBlob, error) {
+
+	fmt.Printf("11111")
 	// MUST be a better way to get the last character.
 	if URL[len(URL)-2:len(URL)-1] == "/" {
 		return nil, errors.New("Cannot end with a /")
 	}
 
-	return nil, nil
+	fmt.Printf("XXX")
+	containerName, blobName, err := ah.getContainerAndBlobNameFromURL(URL)
+	if err != nil {
+		fmt.Printf("returning err %s", err)
+		return nil, err
+	}
+
+	fmt.Printf("container %s, blob %s", containerName, blobName)
+	container := ah.blobStorageClient.GetContainerReference(containerName)
+	blob := container.GetBlobReference(blobName)
+
+	b := models.SimpleBlob{}
+	b.Name = blob.Name
+	b.Origin = models.Azure
+	b.ParentContainer = nil // do we care?
+	b.BlobCloudName = blob.Name
+
+	fmt.Printf("azure blob is %v", b)
+	return &b, nil
 }
 
 // validateURL returns accountName, container Name, blob Name and error

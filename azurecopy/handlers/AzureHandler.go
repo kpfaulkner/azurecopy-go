@@ -6,7 +6,6 @@ import (
 	"azurecopy/azurecopy/utils/misc"
 	"encoding/base64"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"regexp"
@@ -152,9 +151,7 @@ func (ah *AzureHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleCo
 }
 
 // GetContainerContentsOverChannel given a URL (ending in /) returns all the contents of the container over a channel
-// This is going to be inefficient from a memory allocation pov.
-// Am still creating various structs that we strictly do not require for copying (all the tree structure etc) but this will
-// at least help each cloud provider be consistent from a dev pov. Think it's worth the overhead. TODO(kpfaulkner) confirm :)
+// This returns a COPY of the original source container but has been populated with *some* of the blobs/subcontainers in it.
 func (ah *AzureHandler) GetContainerContentsOverChannel(sourceContainer models.SimpleContainer, blobChannel chan models.SimpleContainer) error {
 
 	azureContainer, blobPrefix := containerutils.GetContainerAndBlobPrefix(&sourceContainer)
@@ -166,14 +163,14 @@ func (ah *AzureHandler) GetContainerContentsOverChannel(sourceContainer models.S
 	done := false
 	for done == false {
 		// copy of container, dont want to send back ever growing container via the channel.
-		containerClone := *azureContainer
-		azureContainer := ah.blobStorageClient.GetContainerReference(containerClone.Name)
+		containerClone := sourceContainer
+		azureContainer := ah.blobStorageClient.GetContainerReference(azureContainer.Name)
 		blobListResponse, err := azureContainer.ListBlobs(params)
 		if err != nil {
 			log.Fatal("Error")
 		}
 
-		ah.populateSimpleContainer(blobListResponse, &containerClone)
+		ah.populateSimpleContainer(blobListResponse, &containerClone, blobPrefix)
 
 		// return entire container via channel.
 		blobChannel <- containerClone
@@ -243,43 +240,30 @@ func (ah *AzureHandler) getAzureContainer(containerName string) (*models.SimpleC
 
 }
 
-// getContainerAndBlobNameFromURL returns Azure container and blob names.
-// Format of URL assumed to be https://account.blob.core.windows.net/container/blobname
-func (ah *AzureHandler) getContainerAndBlobNameFromURL(url string) (string, string, error) {
-
-	sp := strings.Split(url, "/")
-	containerName := sp[3]
-	blobName := strings.Join(sp[4:], "/")
-	return containerName, blobName, nil
-}
-
-// GetSpecificSimpleBlob....  returns a single blob
+// GetSpecificSimpleBlob given a URL (NOT ending in /) then get the SIMPLE blob that represents it.
+// The DestName will be the last element of the URL, whether it's a real blobname or not.
+// eg.  https://...../mycontainer/vdir1/vdir2/blobname    will return a DestName of "blobname" even though strictly
+// speaking the true blobname is "vdir1/vdir2/blobname".
+// Will revisit this if it causes a problem.
 func (ah *AzureHandler) GetSpecificSimpleBlob(URL string) (*models.SimpleBlob, error) {
-
-	fmt.Printf("11111")
 	// MUST be a better way to get the last character.
 	if URL[len(URL)-2:len(URL)-1] == "/" {
 		return nil, errors.New("Cannot end with a /")
 	}
-
-	fmt.Printf("XXX")
-	containerName, blobName, err := ah.getContainerAndBlobNameFromURL(URL)
+	_, containerName, blobName, err := ah.validateURL(URL)
 	if err != nil {
-		fmt.Printf("returning err %s", err)
 		return nil, err
 	}
 
-	fmt.Printf("container %s, blob %s", containerName, blobName)
 	container := ah.blobStorageClient.GetContainerReference(containerName)
 	blob := container.GetBlobReference(blobName)
+	simpleContainer, err := ah.getAzureContainer(containerName)
 
 	b := models.SimpleBlob{}
 	b.Name = blob.Name
 	b.Origin = models.Azure
-	b.ParentContainer = nil // do we care?
+	b.ParentContainer = simpleContainer
 	b.BlobCloudName = blob.Name
-
-	fmt.Printf("azure blob is %v", b)
 	return &b, nil
 }
 
@@ -420,6 +404,8 @@ func (ah *AzureHandler) WriteContainer(sourceContainer *models.SimpleContainer, 
 // and if the blobName is "myblob" then the REAL underlying Azure structure would be container == "myrealcontainer"
 // and the blob name is vdir/vdir2/myblob
 func (ah *AzureHandler) WriteBlob(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
+
+	log.Debugf("Azure WriteBlob destcont %s blob %s", destContainer.Name, sourceBlob.Name)
 
 	var err error
 	if ah.cacheToDisk {
@@ -646,7 +632,7 @@ func (ah *AzureHandler) GetContainerContents(container *models.SimpleContainer) 
 		log.Fatal("Error")
 	}
 
-	ah.populateSimpleContainer(blobListResponse, azureContainer)
+	ah.populateSimpleContainer(blobListResponse, azureContainer, blobPrefix)
 
 	return nil
 }
@@ -658,10 +644,11 @@ func (ah *AzureHandler) GetContainerContents(container *models.SimpleContainer) 
 // vdir1/blob2
 // vdir1/vdir3/blob3
 // blob4
-func (ah *AzureHandler) populateSimpleContainer(blobListResponse storage.BlobListResponse, container *models.SimpleContainer) {
+func (ah *AzureHandler) populateSimpleContainer(blobListResponse storage.BlobListResponse, container *models.SimpleContainer, blobPrefix string) {
 
 	for _, blob := range blobListResponse.Blobs {
 
+		log.Debugf("populateSimpleContainer blob %s", blob.Name)
 		sp := strings.Split(blob.Name, "/")
 
 		// if no / then no subdirs etc. Just add as is.

@@ -99,10 +99,12 @@ func (sh *S3Handler) convertURL(URL string) string {
 // vdir1/vdir2/blob1
 // vdir1/blob2
 // vdir1/vdir3/blob3
-// blob4
-func (sh *S3Handler) populateSimpleContainer(s3Objects []*s3.Object, container *models.SimpleContainer) {
+// blob3
+func (sh *S3Handler) populateSimpleContainer(s3Objects []*s3.Object, container *models.SimpleContainer, blobPrefix string) {
 
+	log.Debugf("populateSimpleContainer original container %s", container.Name)
 	for _, blob := range s3Objects {
+		log.Debugf("populateSimpleContainer %s", *blob.Key)
 
 		// if key ends in / then its just a fake directory.
 		// do we even want to store that?
@@ -113,17 +115,29 @@ func (sh *S3Handler) populateSimpleContainer(s3Objects []*s3.Object, container *
 			continue
 		}
 
-		sp := strings.Split(*blob.Key, "/")
+		prunedBlobName := *blob.Key
+		if blobPrefix != "" {
+			prunedBlobName = prunedBlobName[len(blobPrefix):]
+		}
+
+		log.Debugf("pruned blob name %s", prunedBlobName)
+
+		// need to shorten name to remove the container name itself.
+		// ie if the name of a blob if foo/bar.txt but we are currently in the "foo" container (fake vdir)
+		// then we need to prune the container name from the DestName for the blob.
+		sp := strings.Split(prunedBlobName, "/")
 
 		// if no / then no subdirs etc. Just add as is.
 		if len(sp) == 1 {
 			b := models.SimpleBlob{}
-			b.Name = *blob.Key
+			b.Name = prunedBlobName
 			b.Origin = container.Origin
 			b.ParentContainer = container
 			b.BlobCloudName = *blob.Key
+
 			// add to the blob slice within the container
 			container.BlobSlice = append(container.BlobSlice, &b)
+			log.Debugf("1 S3 blob %v", b)
 		} else {
 
 			currentContainer := container
@@ -144,11 +158,12 @@ func (sh *S3Handler) populateSimpleContainer(s3Objects []*s3.Object, container *
 			b.Name = sp[len(sp)-1]
 			b.Origin = container.Origin
 			b.ParentContainer = container
-
 			b.BlobCloudName = *blob.Key // cloud specific name... ie the REAL name.
 			b.URL = generateS3URL(*blob.Key, container.Name)
 			currentContainer.BlobSlice = append(currentContainer.BlobSlice, &b)
 			currentContainer.Populated = true
+
+			log.Debugf("2 S3 blob %v", b)
 
 		}
 	}
@@ -185,8 +200,11 @@ func (sh *S3Handler) getSubContainer(container *models.SimpleContainer, segment 
 // Am still creating various structs that we strictly do not require for copying (all the tree structure etc) but this will
 // at least help each cloud provider be consistent from a dev pov. Think it's worth the overhead. TODO(kpfaulkner) confirm :)
 func (sh *S3Handler) GetContainerContentsOverChannel(sourceContainer models.SimpleContainer, blobChannel chan models.SimpleContainer) error {
+
+	log.Debugf("GetContainerContentsOverChannel source container %s", sourceContainer.Name)
 	s3Container, blobPrefix := containerutils.GetContainerAndBlobPrefix(&sourceContainer)
 
+	log.Debugf("s3 container %s BlobPrefix %s", s3Container, blobPrefix)
 	defer close(blobChannel)
 
 	params := s3.ListObjectsV2Input{
@@ -197,9 +215,8 @@ func (sh *S3Handler) GetContainerContentsOverChannel(sourceContainer models.Simp
 	err := sh.s3Client.ListObjectsV2Pages(&params,
 		func(page *s3.ListObjectsV2Output, lastPage bool) bool {
 			// copy of container, dont want to send back ever growing container via the channel.
-			containerClone := *s3Container
-			sh.populateSimpleContainer(page.Contents, &containerClone)
-			// return entire container via channel.
+			containerClone := sourceContainer
+			sh.populateSimpleContainer(page.Contents, &containerClone, blobPrefix)
 			blobChannel <- containerClone
 
 			return !lastPage
@@ -278,6 +295,7 @@ func (sh *S3Handler) GetSpecificSimpleContainer(URL string) (*models.SimpleConta
 		log.Fatal("GetSpecificSimpleContainer err", err)
 	}
 
+	log.Debugf("S3 blobprefix %s", blobPrefix)
 	container, err := sh.getS3Bucket(containerName)
 	if err != nil {
 		log.Fatal(err)
@@ -289,7 +307,8 @@ func (sh *S3Handler) GetSpecificSimpleContainer(URL string) (*models.SimpleConta
 		container.ContainerSlice = append(container.ContainerSlice, subContainer)
 	}
 
-	// return the "deepest" container.
+	fmt.Printf("S3 specific container %v\n", lastContainer)
+	fmt.Printf("S3 specific container name %s\n", lastContainer.Name)
 	return lastContainer, nil
 }
 
@@ -322,13 +341,33 @@ func (sh *S3Handler) validateURL(URL string) (string, string, error) {
 }
 
 // GetSpecificSimpleBlob given a URL (NOT ending in /) then get the SIMPLE blob that represents it.
+// The DestName will be the last element of the URL, whether it's a real blobname or not.
+// eg.  https://...../mycontainer/vdir1/vdir2/blobname    will return a DestName of "blobname" even though strictly
+// speaking the true blobname is "vdir1/vdir2/blobname".
+// Will revisit this if it causes a problem.
 func (sh *S3Handler) GetSpecificSimpleBlob(URL string) (*models.SimpleBlob, error) {
 	// MUST be a better way to get the last character.
 	if URL[len(URL)-2:len(URL)-1] == "/" {
 		return nil, errors.New("Cannot end with a /")
 	}
 
-	return nil, nil
+	containerName, blobName, err := sh.validateURL(URL)
+	if err != nil {
+		log.Fatal("GetSpecificSimpleContainer err", err)
+	}
+
+	// get parent container (ie this will be the real S3 bucket)
+	parentContainer, err := sh.getS3Bucket(containerName)
+	if err != nil {
+		return nil, err
+	}
+
+	b := models.SimpleBlob{}
+	b.Name = blobName
+	b.Origin = models.S3
+	b.ParentContainer = parentContainer
+	b.BlobCloudName = blobName
+	return &b, nil
 }
 
 // ReadBlob reads a blob of a given name from a particular SimpleContainer and returns the SimpleBlob
@@ -567,7 +606,7 @@ func (sh *S3Handler) GetContainerContents(container *models.SimpleContainer) err
 		return err
 	}
 
-	sh.populateSimpleContainer(blobSlice, container)
+	sh.populateSimpleContainer(blobSlice, container, blobPrefix)
 
 	return nil
 }

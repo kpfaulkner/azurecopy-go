@@ -144,6 +144,11 @@ func (ac *AzureCopy) CopySingleBlobByURL(sourceURL string, destURL string, repla
 		return err
 	}
 
+	// prune destination to just be last element of blobname.
+	// dest name is the "fake" name excluding any "/" prefix (ie fake vdirs)
+	sp := strings.Split(simpleSourceBlob.BlobCloudName, "/")
+	simpleSourceBlob.DestName = sp[len(sp)-1]
+
 	fmt.Printf("single blob is %v", simpleSourceBlob)
 	destContainer, err := ac.destHandler.GetSpecificSimpleContainer(destURL)
 	if err != nil {
@@ -170,7 +175,6 @@ func (ac *AzureCopy) CopySingleBlobByURL(sourceURL string, destURL string, repla
 // The plan is to consolidate both listing and copying into using the same methods, but for now
 // want to make sure copying at least is able to start copying blobs before the listing is finished.
 // So will use GoRoutines to concurrently retrieve list of blobs and another for writing to destination.
-// First real attempt using GoRoutines for something "real" so will see how it goes.
 func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replaceExisting bool, useCopyBlobFlag bool) error {
 
 	fmt.Printf("copy from %s to %s\n", sourceURL, destURL)
@@ -179,6 +183,8 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replac
 	if err != nil {
 		log.Fatal("CopyContainerByURL failed source ", err)
 	}
+	log.Debugf("Deepest source container %s", deepestContainer.Name)
+	log.Debugf("container has childcontainers %v", deepestContainer.ContainerSlice)
 
 	deepestDestinationContainer, err := ac.destHandler.GetSpecificSimpleContainer(destURL)
 	if err != nil {
@@ -196,6 +202,7 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replac
 
 	// get container contents over channel.
 	// get the blobs for the deepest vdir which is part of the URL.
+	// The readChannel will be populated with containers that are populated from the "REAL" cloud container. ie Azure Container or S3 bucket.
 	go ac.sourceHandler.GetContainerContentsOverChannel(*deepestContainer, readChannel)
 	if err != nil {
 		log.Fatalf("CopyContainerByURL err %s", err)
@@ -240,15 +247,20 @@ func (ac *AzureCopy) launchCopyGoRoutines(destContainer *models.SimpleContainer,
 func (ac *AzureCopy) populateCopyChannel(sourceContainer *models.SimpleContainer, prefix string, copyChannel chan models.SimpleBlob) error {
 
 	log.Debugf("sourcecontainer blobslice size %d", len(sourceContainer.BlobSlice))
+	log.Debugf("populateCopyChannel prefix %s", prefix)
+	log.Debugf("populateCopyChannel container %s", sourceContainer.Name)
+
 	// copy all blobs
 	for _, blob := range sourceContainer.BlobSlice {
 
+		log.Debugf("populateCopyChannel blobname %s", blob.Name)
 		if prefix != "" {
 			blob.DestName = prefix + "/" + blob.Name
 		} else {
 			blob.DestName = blob.Name
 		}
 
+		log.Debugf("changing destname %s", blob.DestName)
 		log.Debugf("Adding blob %s to channel", blob.URL)
 		copyChannel <- *blob
 	}
@@ -256,7 +268,6 @@ func (ac *AzureCopy) populateCopyChannel(sourceContainer *models.SimpleContainer
 	log.Debugf("DB populateCopyChannel name %s", sourceContainer.Name)
 	log.Debugf("populateCopyChannel containerSlice size %d", len(sourceContainer.ContainerSlice))
 
-	// call for each sub container.
 	for _, container := range sourceContainer.ContainerSlice {
 		log.Debugf("container name is %s", container.Name)
 		var newPrefix string

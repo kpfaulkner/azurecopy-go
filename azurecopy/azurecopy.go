@@ -149,7 +149,7 @@ func (ac *AzureCopy) CopySingleBlobByURL(sourceURL string, destURL string, repla
 	sp := strings.Split(simpleSourceBlob.BlobCloudName, "/")
 	simpleSourceBlob.DestName = sp[len(sp)-1]
 
-	fmt.Printf("single blob is %v", simpleSourceBlob)
+	log.Debugf("single blob is %v", simpleSourceBlob)
 	destContainer, err := ac.destHandler.GetSpecificSimpleContainer(destURL)
 	if err != nil {
 		return err
@@ -177,14 +177,10 @@ func (ac *AzureCopy) CopySingleBlobByURL(sourceURL string, destURL string, repla
 // So will use GoRoutines to concurrently retrieve list of blobs and another for writing to destination.
 func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replaceExisting bool, useCopyBlobFlag bool) error {
 
-	fmt.Printf("copy from %s to %s\n", sourceURL, destURL)
-
 	deepestContainer, err := ac.sourceHandler.GetSpecificSimpleContainer(sourceURL)
 	if err != nil {
 		log.Fatal("CopyContainerByURL failed source ", err)
 	}
-	log.Debugf("Deepest source container %s", deepestContainer.Name)
-	log.Debugf("container has childcontainers %v", deepestContainer.ContainerSlice)
 
 	deepestDestinationContainer, err := ac.destHandler.GetSpecificSimpleContainer(destURL)
 	if err != nil {

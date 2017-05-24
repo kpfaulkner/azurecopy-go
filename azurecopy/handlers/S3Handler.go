@@ -163,7 +163,7 @@ func (sh *S3Handler) populateSimpleContainer(s3Objects []*s3.Object, container *
 			currentContainer.BlobSlice = append(currentContainer.BlobSlice, &b)
 			currentContainer.Populated = true
 
-			log.Debugf("2 S3 blob %v", b)
+			log.Debugf("2 S3 blob name %s", b.Name)
 
 		}
 	}
@@ -196,9 +196,7 @@ func (sh *S3Handler) getSubContainer(container *models.SimpleContainer, segment 
 }
 
 // GetContainerContentsOverChannel given a URL (ending in /) returns all the contents of the container over a channel
-// This is going to be inefficient from a memory allocation pov.
-// Am still creating various structs that we strictly do not require for copying (all the tree structure etc) but this will
-// at least help each cloud provider be consistent from a dev pov. Think it's worth the overhead. TODO(kpfaulkner) confirm :)
+// This returns a COPY of the original source container but has been populated with *some* of the blobs/subcontainers in it.
 func (sh *S3Handler) GetContainerContentsOverChannel(sourceContainer models.SimpleContainer, blobChannel chan models.SimpleContainer) error {
 
 	log.Debugf("GetContainerContentsOverChannel source container %s", sourceContainer.Name)

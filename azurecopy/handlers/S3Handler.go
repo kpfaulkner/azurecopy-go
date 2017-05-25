@@ -134,7 +134,7 @@ func (sh *S3Handler) populateSimpleContainer(s3Objects []*s3.Object, container *
 			b.Origin = container.Origin
 			b.ParentContainer = container
 			b.BlobCloudName = *blob.Key
-
+			b.URL = generateS3URL(*blob.Key, container.Name)
 			// add to the blob slice within the container
 			container.BlobSlice = append(container.BlobSlice, &b)
 			log.Debugf("1 S3 blob %v", b)

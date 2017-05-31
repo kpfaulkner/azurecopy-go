@@ -6,7 +6,6 @@ import (
 	"azurecopy/azurecopy/utils/containerutils"
 	"azurecopy/azurecopy/utils/helpers"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"regexp"
 	"strings"
@@ -71,49 +70,68 @@ func (dh *DropboxHandler) BlobExists(container models.SimpleContainer, blobName 
 }
 
 // GetContainerContentsOverChannel given a URL (ending in /) returns all the contents of the container over a channel
-// This is going to be inefficient from a memory allocation pov.
-// Am still creating various structs that we strictly do not require for copying (all the tree structure etc) but this will
-// at least help each cloud provider be consistent from a dev pov. Think it's worth the overhead. TODO(kpfaulkner) confirm :)
+// This returns a COPY of the original source container but has been populated with *some* of the blobs/subcontainers in it.
+// The way the dropbox code is written the sourceContainer should actually be holding ALL the blobs already so there is nothing to do except
+// push to channel.
+//
+// This might be an issue later with massive number of dropbox blobs. FIXME(kpfaulkner)
 func (dh *DropboxHandler) GetContainerContentsOverChannel(sourceContainer models.SimpleContainer, blobChannel chan models.SimpleContainer) error {
 
-	dbx := files.New(*config)
+	log.Debugf("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
+	log.Debugf("dropbox::GetContainerContentsOverChannel container %s", sourceContainer.Name)
+	defer close(blobChannel)
 
-	container, prefix := containerutils.GetContainerAndBlobPrefix(&sourceContainer)
+	sourceContainer.DisplayContainer("")
 
-	log.Debugf("container name %s", sourceContainer.Name)
-	log.Debugf("prefix %s", prefix)
+	blobChannel <- sourceContainer
 
-	var dirArg string
-	if prefix != "" {
-		dirArg = fmt.Sprintf("/%s/%s", container.Name, prefix)
+	/*
 
-	} else {
-		dirArg = "/" + container.Name
-	}
+		dbx := files.New(*config)
 
-	arg := files.NewListFolderArg(dirArg)
-	arg.Recursive = true
+		// this is not valid... since dropbox doesn't have fake directories but real ones!!!
+		container, prefix := containerutils.GetContainerAndBlobPrefix(&sourceContainer)
+		log.Debugf("DB prefix %s", prefix)
+		log.Debugf("DB container %s", container.Name)
 
-	res, err := dbx.ListFolder(arg)
-	if err != nil {
-		log.Fatalf("Dropbox::GetRootContainer error %s", err)
-	}
-
-	containerClone := sourceContainer
-	processEntries(res, dirArg, &containerClone)
-	blobChannel <- containerClone
-
-	for res.HasMore {
-		arg := files.NewListFolderContinueArg(res.Cursor)
-
-		res, err = dbx.ListFolderContinue(arg)
-		if err != nil {
-			return err
+		var dirArg string
+		if prefix != "" {
+			dirArg = fmt.Sprintf("%s/%s", container.Name, prefix)
+		} else {
+			dirArg = "/" + container.Name
 		}
+
+		log.Debugf("DB dirarg %s", dirArg)
+
+		arg := files.NewListFolderArg(dirArg)
+		arg.Recursive = true
+
+		res, err := dbx.ListFolder(arg)
+		if err != nil {
+			log.Fatalf("Dropbox::GetRootContainer error %s", err)
+		}
+
 		containerClone := sourceContainer
 		processEntries(res, dirArg, &containerClone)
+
+		log.Debugf("populate 1")
 		blobChannel <- containerClone
-	}
+
+		for res.HasMore {
+			arg := files.NewListFolderContinueArg(res.Cursor)
+
+			res, err = dbx.ListFolderContinue(arg)
+			if err != nil {
+				return err
+			}
+			containerClone := sourceContainer
+			processEntries(res, dirArg, &containerClone)
+			log.Debugf("populate 2")
+			blobChannel <- containerClone
+		}
+
+		log.Debugf("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
+	*/
 
 	/*
 		done := false
@@ -162,10 +180,12 @@ func (dh *DropboxHandler) GetContainerContentsOverChannel(sourceContainer models
 	return nil
 }
 
-// GetSpecificSimpleContainer gets a specific dropbox directory/container
+// GetContainerContentsOverChannel given a URL (ending in /) returns all the contents of the container over a channel
+// This returns a COPY of the original source container but has been populated with *some* of the blobs/subcontainers in it.
 func (dh *DropboxHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleContainer, error) {
-	dbx := files.New(*config)
 
+	log.Debugf("GetSpecificSimpleContainer url %s", URL)
+	dbx := files.New(*config)
 	dirArg := dh.getDirArg(URL)
 	log.Debugf("DirArg is %s", dirArg)
 
@@ -194,6 +214,7 @@ func (dh *DropboxHandler) GetSpecificSimpleContainer(URL string) (*models.Simple
 
 		res, err = dbx.ListFolderContinue(arg)
 		if err != nil {
+			log.Debugf("ListFolderContinue err: %s", err)
 			return nil, err
 		}
 
@@ -203,8 +224,11 @@ func (dh *DropboxHandler) GetSpecificSimpleContainer(URL string) (*models.Simple
 	// get the container we're actually after.
 	wantedContainer, err := filterContainer(&container, dirArg)
 	if err != nil {
+		log.Debugf("filterContainer returned error %s", err)
 		return nil, err
 	}
+
+	log.Debugf("Dropbox::GetSpecificSimpleContainer returns container %s", wantedContainer.Name)
 	return wantedContainer, nil
 }
 
@@ -227,7 +251,8 @@ func filterContainer(rootContainer *models.SimpleContainer, dirArg string) (*mod
 			foundChild := false
 			// check children.
 			for _, childContainer = range container.ContainerSlice {
-				if childContainer.Name == dir {
+				log.Debugf("comparing against %s", childContainer.Name)
+				if strings.ToLower(childContainer.Name) == strings.ToLower(dir) {
 					// found what we want.
 					foundChild = true
 					break
@@ -374,12 +399,11 @@ func trimContainerName(containerName string) string {
 }
 
 func processEntries(results *files.ListFolderResult, dirArg string, rootContainer *models.SimpleContainer) {
+	log.Debugf("processEntries sourceContainer %s", rootContainer.Name)
 	for _, i := range results.Entries {
-		log.Debugf("DB res %s", i)
 		switch f := i.(type) {
 		case *files.FileMetadata:
-
-			log.Debugf("DB is file %s", i)
+			log.Debugf("DB is file %s", f.PathDisplay)
 			blob := models.SimpleBlob{}
 			blob.Name = f.Name
 			//blob.URL = fmt.Sprintf("https://www.dropbox.com%s", f.PathDisplay) // NOT A REAL URL.... do we need it?
@@ -491,10 +515,11 @@ func (dh *DropboxHandler) PopulateBlob(blob *models.SimpleBlob) error {
 	arg := files.NewDownloadArg(blob.URL)
 	log.Debugf("DB URL to download %s", blob.URL)
 	res, contents, err := dbx.Download(arg)
-	if err != nil {
-		log.Errorf("DB Cannot download blob %s, %s", blob.URL, err)
-		return err
-	}
+
+	//if err != nil {
+	//		log.Errorf("DB Cannot download blob %s, %s", blob.URL, err)
+	//		return err
+	//	}
 
 	log.Debugf("res %s", res)
 	log.Debugf("contents %s", contents)

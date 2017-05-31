@@ -6,12 +6,14 @@ import (
 	"azurecopy/azurecopy/utils/misc"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"regexp"
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/satori/uuid"
 
 	storage "azure-sdk-for-go/storage"
 )
@@ -576,10 +578,13 @@ func (ah *AzureHandler) writeMemoryToBlob(containerName string, blobName string,
 	//hasher := sha1.New()
 	//hasher.Write(buffer)
 	//blockID = hex.EncodeToString(hasher.Sum(nil))
+	blockID = fmt.Sprintf("%s", uuid.NewV1())
 
-	blockID = base64.StdEncoding.EncodeToString(buffer)
+	blockID = base64.StdEncoding.EncodeToString([]byte(blockID))
 	container := ah.blobStorageClient.GetContainerReference(containerName)
 	blob := container.GetBlobReference(blobName)
+	log.Debugf("blockID %s", blockID)
+	//log.Fatal("BANG")
 	err := blob.PutBlock(blockID, buffer, nil)
 	if err != nil {
 		log.Fatal("Unable to PutBlock ", blockID)

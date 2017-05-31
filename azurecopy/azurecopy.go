@@ -179,13 +179,16 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replac
 
 	deepestContainer, err := ac.sourceHandler.GetSpecificSimpleContainer(sourceURL)
 	if err != nil {
-		log.Fatal("CopyContainerByURL failed source ", err)
+		log.Fatal("CopyContainerByURL failed source: ", err)
 	}
 
 	deepestDestinationContainer, err := ac.destHandler.GetSpecificSimpleContainer(destURL)
 	if err != nil {
-		log.Fatal("CopyContainerByURL failed dest ", err)
+		log.Fatal("CopyContainerByURL failed dest: ", err)
 	}
+
+	log.Debugf("deepest source container %s", deepestContainer.Name)
+	log.Debugf("deepest dest container %s", deepestDestinationContainer.Name)
 
 	// make channel for reading from cloud.
 	readChannel := make(chan models.SimpleContainer, 1000)
@@ -211,6 +214,8 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replac
 			// channel closed. We're done now.
 			break
 		}
+
+		containerDetails.DisplayContainer("")
 
 		// populate the copyChannel with individual blobs.
 		ac.populateCopyChannel(&containerDetails, "", copyChannel)
@@ -243,6 +248,16 @@ func (ac *AzureCopy) launchCopyGoRoutines(destContainer *models.SimpleContainer,
 func (ac *AzureCopy) populateCopyChannel(sourceContainer *models.SimpleContainer, prefix string, copyChannel chan models.SimpleBlob) error {
 
 	log.Debugf("sourcecontainer blobslice size %d", len(sourceContainer.BlobSlice))
+	log.Debugf("populateCopyChannel ContainerSlice size %d", len(sourceContainer.ContainerSlice))
+
+	if len(sourceContainer.BlobSlice) > 0 {
+		log.Debugf("first blob is %s", sourceContainer.BlobSlice[0].Name)
+	}
+
+	if len(sourceContainer.ContainerSlice) > 0 {
+		log.Debugf("first container is %s", sourceContainer.ContainerSlice[0].Name)
+	}
+
 	log.Debugf("populateCopyChannel prefix %s", prefix)
 	log.Debugf("populateCopyChannel container %s", sourceContainer.Name)
 
@@ -444,6 +459,7 @@ func (ac *AzureCopy) WriteBlob(destContainer *models.SimpleContainer, sourceBlob
 		if err != nil {
 			log.Errorf("Unable to delete cache file %s", err)
 		}
+		log.Debugf("deleted cache file %s", sourceBlob.DataCachedAtPath)
 	}
 
 	return nil

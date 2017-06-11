@@ -82,7 +82,7 @@ func (ac *AzureCopy) getCloudType(url string) (cloudType models.CloudType, isEmu
 
 	// S3
 	// need to think about S3 compatible devices. TODO(kpfaulkner)
-	match, _ = regexp.MatchString("s3.amazonaws.com", lowerURL)
+	match, _ = regexp.MatchString("amazonaws.com", lowerURL)
 	if match {
 		return models.S3, false
 	}

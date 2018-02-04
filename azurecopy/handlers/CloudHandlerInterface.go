@@ -17,6 +17,9 @@ type CloudHandlerInterface interface {
 	CreateContainer(containerName string) (models.SimpleContainer, error)
 
 	// GetSpecificSimpleContainer given a URL (ending in /) then get the SIMPLE container that represents it.
+	// does not have to have all blobs populated in it. Those can be retrieved later via GetContainerContentsOverChannel
+	// This is up to specific handlers. Currently (for example) Dropbox handler returns all the contents
+	// blobs and subcontainers during this call. THIS MAY BE REVISED!!
 	GetSpecificSimpleContainer(URL string) (*models.SimpleContainer, error)
 
 	// GetContainerContentsOverChannel given a URL (ending in /) returns all the contents of the container over a channel

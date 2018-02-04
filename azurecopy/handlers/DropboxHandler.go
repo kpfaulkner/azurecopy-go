@@ -7,9 +7,10 @@ import (
 	"azurecopy/azurecopy/utils/helpers"
 	"errors"
 	"io/ioutil"
+	"path"
 	"regexp"
 	"strings"
-
+	"bytes"
 	log "github.com/Sirupsen/logrus"
 	"github.com/dropbox/dropbox-sdk-go-unofficial/dropbox"
 	"github.com/dropbox/dropbox-sdk-go-unofficial/dropbox/files"
@@ -180,11 +181,13 @@ func (dh *DropboxHandler) GetContainerContentsOverChannel(sourceContainer models
 	return nil
 }
 
-// GetContainerContentsOverChannel given a URL (ending in /) returns all the contents of the container over a channel
-// This returns a COPY of the original source container but has been populated with *some* of the blobs/subcontainers in it.
+// GetSpecificSimpleContainer returns the DEEPEST container. eg. if the url is ...../vdir1/vdir2/vdir3  then the simplecontainer returned
+// is vdir3 
+// GetSpecificSimpleContainer given a URL (ending in /) then get the SIMPLE container that represents it.
+// For DROPBOX the simplecontainer will be fully populated with the blobs/subcontainers.
 func (dh *DropboxHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleContainer, error) {
 
-	log.Debugf("GetSpecificSimpleContainer url %s", URL)
+	log.Debugf("DB: GetSpecificSimpleContainer url %s", URL)
 	dbx := files.New(*config)
 	dirArg := dh.getDirArg(URL)
 	log.Debugf("DirArg is %s", dirArg)
@@ -199,14 +202,15 @@ func (dh *DropboxHandler) GetSpecificSimpleContainer(URL string) (*models.Simple
 		log.Fatalf("Dropbox::GetRootContainer error %s", err)
 	}
 
+	/*
 	log.Debugf("results are %+v\n", res)
 
 	for _, i := range res.Entries {
 		log.Debugf("entry is %+v\n", i)
 	}
-
+ */
 	container := models.SimpleContainer{}
-	container.Name = "" // getLastSegmentOfPath(dirArg)
+	container.Name = "" // getLastSegmentOfPath(dirArg). This is the root?
 	processEntries(res, dirArg, &container)
 
 	for res.HasMore {
@@ -232,20 +236,21 @@ func (dh *DropboxHandler) GetSpecificSimpleContainer(URL string) (*models.Simple
 	return wantedContainer, nil
 }
 
-// filterContainer gets the container we're after by checking dirArg  and pruning off the parent
-// containers we're not after.
+// filterContainer gets the container we're after by checking dirArg 
 //
-// ie rootContainer is literally the root, but maybe we were after /temp/dir1/dir2/  so we prune off
-// the root, temp and dir1 parent containers and just return the dir2 container.
+// ie rootContainer is literally the root, but maybe we were after /temp/dir1/dir2/  so we return the 
+// subcontainer referencing dir2
 func filterContainer(rootContainer *models.SimpleContainer, dirArg string) (*models.SimpleContainer, error) {
 
 	log.Debugf("filter container %s", dirArg)
 	sp := strings.Split(dirArg, "/")
 
+	log.Debugf("rootContainer has %d sub containers", len( rootContainer.ContainerSlice))
 	container := rootContainer
 	for _, dir := range sp {
 		if dir != "" {
 			log.Debugf("checking %s", dir)
+			log.Debugf("container %s has %d subcontainers", container.Name, len(container.ContainerSlice))
 			var childContainer *models.SimpleContainer
 
 			foundChild := false
@@ -255,6 +260,8 @@ func filterContainer(rootContainer *models.SimpleContainer, dirArg string) (*mod
 				if strings.ToLower(childContainer.Name) == strings.ToLower(dir) {
 					// found what we want.
 					foundChild = true
+
+					log.Debugf("FOUND container %s", dir)
 					break
 				}
 			}
@@ -417,18 +424,19 @@ func processEntries(results *files.ListFolderResult, dirArg string, rootContaine
 			//container.BlobSlice = append(container.BlobSlice, &blob)
 			log.Debugf("FILE %s", f.Name)
 			log.Debugf("path display %s", f.PathDisplay)
+			break
 
-			/*
-				case *files.FolderMetadata:
-					c := models.SimpleContainer{}
-					c.Name = f.Name
-					c.ParentContainer = container
-					c.URL = fmt.Sprintf("https://www.dropbox.com%s", f.PathDisplay) // NOT A REAL URL.... do we need it?
-					c.Origin = models.DropBox
-					container.ContainerSlice = append(container.ContainerSlice, &c)
-					log.Debugf("DIR %s", f.Name) */
-
+		// folder (real folder)... create simplecontainer and populate?
+		// might not be needed... since addToContainer (for files) should create the intermediate
+		// containers as it goes. (I think)
+		// Will only be missed for empty directories, which I can live with.
+		// REALLY DONT CARE ABOUT THIS!
+		case *files.FolderMetadata:
+			log.Debugf("FOLDER %s", f.Name)
+			addSubContainer( f.PathDisplay, rootContainer)
+			break
 		}
+		 
 	}
 
 }
@@ -462,6 +470,27 @@ func addToContainer(blob *models.SimpleBlob, path string, rootContainer *models.
 	parentContainer.BlobSlice = append(parentContainer.BlobSlice, blob)
 }
 
+// addSubContainer adds the subcontainer(s) to the root container.
+func addSubContainer(path string, rootContainer *models.SimpleContainer) {
+
+	sp := strings.Split(path, "/")
+
+	parentContainer := rootContainer
+
+	for i := 0; i < len(sp); i++ {
+		segment := sp[i]
+		log.Debugf("Container segment :%s:", segment)
+
+		// dont want to add root container... already have it!
+		if segment != "" {
+			container := containerutils.GetContainerByName(parentContainer, segment)
+			parentContainer = container
+		}
+
+	}
+}
+
+	
 // getDirArg gets the directory argument for listing contents.
 func (dh *DropboxHandler) getDirArg(URL string) string {
 	lowerURL := strings.ToLower(URL)
@@ -537,13 +566,51 @@ func (dh *DropboxHandler) WriteContainer(sourceContainer *models.SimpleContainer
 	return nil
 }
 
+func generateDestDir( destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) string {
+	dirSlice := make([]string, 5)
+
+	dirSlice = append(dirSlice, destContainer.Name )
+
+	container := destContainer
+	done := false
+	for done != true {
+		if container.ParentContainer != nil && container.ParentContainer.Name != "" {
+
+			// yes, prepending by appending...
+			// I blame Go not having a reverse function :)
+			dirSlice = append([]string{ container.ParentContainer.Name}, dirSlice...)
+			container = container.ParentContainer
+		} else {
+			done = true
+		}
+	}
+
+	dir := path.Join(dirSlice...)
+	return "/"+dir + "/" + sourceBlob.Name
+}
+
 // WriteBlob writes a blob to an Azure container.
 // The SimpleContainer is NOT necessarily a direct mapping to an Azure container but may be representing a virtual directory.
 // ie we might have RootSimpleContainer -> SimpleContainer(myrealcontainer) -> SimpleContainer(vdir1) -> SimpleContainer(vdir2)
 // and if the blobName is "myblob" then the REAL underlying Azure structure would be container == "myrealcontainer"
 // and the blob name is vdir/vdir2/myblob
 func (dh *DropboxHandler) WriteBlob(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
+	log.Debugf("DB: should be writing blobs!!")
 
+	log.Debugf("DB: dest container is %s", destContainer.Name)
+	log.Debugf("DB: destcontainer parent is %s", destContainer.ParentContainer.Name)
+
+	destDir := generateDestDir( destContainer, sourceBlob)
+
+	log.Debugf("DEST DIR is %s", destDir)
+	dbx := files.New(*config)
+	dst := destDir + sourceBlob.Name
+	commitInfo := files.NewCommitInfo(dst)
+	commitInfo.Mode.Tag = "overwrite"
+
+	fileBytes := bytes.NewReader(sourceBlob.DataInMemory) // convert to io.ReadSeeker type
+
+	dbx.Upload( commitInfo, fileBytes)
 	return nil
 }
 

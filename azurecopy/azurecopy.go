@@ -176,18 +176,17 @@ func (ac *AzureCopy) CopySingleBlobByURL(sourceURL string, destURL string, repla
 // want to make sure copying at least is able to start copying blobs before the listing is finished.
 // So will use GoRoutines to concurrently retrieve list of blobs and another for writing to destination.
 func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replaceExisting bool, useCopyBlobFlag bool) error {
-
+	log.Debugf("CopyContainerByURL %s to %s", sourceURL, destURL )
 	deepestContainer, err := ac.sourceHandler.GetSpecificSimpleContainer(sourceURL)
 	if err != nil {
 		log.Fatal("CopyContainerByURL failed source: ", err)
 	}
+	log.Debugf("deepest source container is %s", deepestContainer.Name)
 
 	deepestDestinationContainer, err := ac.destHandler.GetSpecificSimpleContainer(destURL)
 	if err != nil {
 		log.Fatal("CopyContainerByURL failed dest: ", err)
 	}
-
-	log.Debugf("deepest source container %s", deepestContainer.Name)
 	log.Debugf("deepest dest container %s", deepestDestinationContainer.Name)
 
 	// make channel for reading from cloud.

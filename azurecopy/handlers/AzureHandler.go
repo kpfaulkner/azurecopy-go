@@ -288,8 +288,8 @@ func (ah *AzureHandler) validateURL(URL string) (string, string, string, error) 
 	}
 
 	// trim protocol
-	lowerURL = lowerURL[pruneCount:]
-	sp := strings.Split(lowerURL, "/")
+	URL = URL[pruneCount:]
+	sp := strings.Split(URL, "/")
 
 	sp2 := strings.Split(sp[0], ".")
 	accountName := sp2[0]

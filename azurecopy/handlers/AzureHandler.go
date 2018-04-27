@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -15,11 +16,11 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/satori/uuid"
 
-	storage "azure-sdk-for-go/storage"
+	storage "azure-storage-blob-go/2016-05-31/azblob"
 )
 
 type AzureHandler struct {
-	blobStorageClient storage.BlobStorageClient
+	serviceURL storage.serviceURL
 
 	// determine if we're caching the blob to disk during copy operations.
 	// or if we're keeping it in memory
@@ -49,10 +50,13 @@ func NewAzureHandler(accountName string, accountKey string, isSource bool, cache
 	var client storage.Client
 
 	if isEmulator || (accountName == "" && accountKey == "") {
-		client, err = storage.NewEmulatorClient()
-	} else {
-		client, err = storage.NewBasicClient(accountName, accountKey)
+		// set emulator accountName and accountKey
 	}
+
+	credential := NewSharedKeyCredential(accountName, accountKey)
+	p := NewPipeline(credential, PipelineOptions{})
+	u, _ := url.Parse(fmt.Sprintf("https://%s.blob.core.windows.net", accountName))
+	serviceURL := NewServiceURL(*u, p)
 
 	if err != nil {
 
@@ -60,7 +64,7 @@ func NewAzureHandler(accountName string, accountKey string, isSource bool, cache
 		return nil, err
 	}
 
-	ah.blobStorageClient = client.GetBlobService()
+	ah.serviceURL = serviceURL
 	return ah, nil
 }
 

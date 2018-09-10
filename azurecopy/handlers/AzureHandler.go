@@ -16,11 +16,15 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/satori/uuid"
 
-	storage "azure-storage-blob-go/2016-05-31/azblob"
+	storage "github.com/azure/azure-storage-blob-go/2016-05-31/azblob"
+	"time"
+	"context"
+
+	"bytes"
 )
 
 type AzureHandler struct {
-	serviceURL storage.serviceURL
+	serviceURL storage.ServiceURL
 
 	// determine if we're caching the blob to disk during copy operations.
 	// or if we're keeping it in memory
@@ -47,16 +51,15 @@ func NewAzureHandler(accountName string, accountKey string, isSource bool, cache
 	ah.cacheLocation = dir
 	ah.IsSource = isSource
 	ah.IsEmulator = isEmulator
-	var client storage.Client
 
 	if isEmulator || (accountName == "" && accountKey == "") {
 		// set emulator accountName and accountKey
 	}
 
-	credential := NewSharedKeyCredential(accountName, accountKey)
-	p := NewPipeline(credential, PipelineOptions{})
+	credential := storage.NewSharedKeyCredential(accountName, accountKey)
+	p := storage.NewPipeline(credential, storage.PipelineOptions{})
 	u, _ := url.Parse(fmt.Sprintf("https://%s.blob.core.windows.net", accountName))
-	serviceURL := NewServiceURL(*u, p)
+	serviceURL := storage.NewServiceURL(*u, p)
 
 	if err != nil {
 
@@ -66,11 +69,6 @@ func NewAzureHandler(accountName string, accountKey string, isSource bool, cache
 
 	ah.serviceURL = serviceURL
 	return ah, nil
-}
-
-// GetClient gets the Azure client. This is needed to be exposed so a helper function elsewhere can
-func (ah *AzureHandler) GetClient() *storage.BlobStorageClient {
-	return &ah.blobStorageClient
 }
 
 // DoCopyBlobUsingAzureCopyBlobFlag copy using Azure CopyBlob flag.
@@ -83,14 +81,9 @@ func (ah *AzureHandler) DoCopyBlobUsingAzureCopyBlobFlag(sourceBlob *models.Simp
 // that has the containerSlice populated with the real Azure containers.
 func (ah *AzureHandler) GetRootContainer() models.SimpleContainer {
 
-	params := storage.ListContainersParameters{}
-	containerResponse, err := ah.blobStorageClient.ListContainers(params)
-
-	if err != nil {
-		// NFI.
-		log.Debugf("AzureHandler::GetRootContainer error %s", err)
-	}
-
+	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
+	defer cancel()
+	containerResponse, _:= ah.serviceURL.ListContainers( ctx, storage.Marker{}, storage.ListContainersOptions{}  )
 	rootContainer := models.NewSimpleContainer()
 
 	for _, c := range containerResponse.Containers {
@@ -107,20 +100,30 @@ func (ah *AzureHandler) GetRootContainer() models.SimpleContainer {
 // BlobExists checks if blob exists
 func (ah *AzureHandler) BlobExists(container models.SimpleContainer, blobName string) (bool, error) {
 
-	azureContainerName, azureBlobName := ah.getContainerAndBlobNames(&container, blobName)
-	azureContainer := ah.blobStorageClient.GetContainerReference(azureContainerName)
-	blob := azureContainer.GetBlobReference(azureBlobName)
-	exists, err := blob.Exists()
+	azureContainerName, _ := ah.getContainerAndBlobNames(&container, blobName)
+	containerURL := ah.serviceURL.NewContainerURL(azureContainerName)
+	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
+	defer cancel()
+
+	// must be a better way surely?
+	resp, err := containerURL.ListBlobs(ctx, storage.Marker{}, storage.ListBlobsOptions{Prefix: blobName})
 	if err != nil {
 		return false, err
 	}
-	return exists, nil
+
+	for _,bn := range resp.Blobs.Blob {
+		if bn.Name == blobName {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 // GetSpecificSimpleContainer given a URL (ending in /) then get the SIMPLE container that represents it.
 // returns the container of the last most part of the url.
 // eg. if the url was https://myacct.blob.core.windows.net/realazurecontainer/vdir1/vdir2/  then the simple container
-// returned is vdir.
+// returned is vdir2.
 func (ah *AzureHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleContainer, error) {
 
 	lastChar := URL[len(URL)-1:]
@@ -129,31 +132,50 @@ func (ah *AzureHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleCo
 		return nil, errors.New("Needs to end with a /")
 	}
 
-	_, containerName, blobPrefix, err := ah.validateURL(URL)
+	_, containerName, blobPrefix, _, err := ah.validateURL(URL)
 	if err != nil {
 		log.Fatal("GetSpecificSimpleContainer err", err)
 	}
 
-	container, err := ah.getAzureContainer(containerName)
+	var simpleContainer *models.SimpleContainer
+
+	simpleContainer, err = ah.getAzureContainerAsSimpleContainer(containerName)
 	if err != nil {
 
 		log.Debugf("container %s didn't exist, trying to create it: %s", containerName, err)
-		// cant get container, create it.
-		azureContainer := ah.blobStorageClient.GetContainerReference(containerName)
-		_, err := azureContainer.CreateIfNotExists(nil)
+
+		_, _ = ah.getOrCreateContainer( containerName)
+		simpleContainer, err = ah.getAzureContainerAsSimpleContainer(containerName)
 		if err != nil {
-			log.Fatal(err)
+			return nil, err
 		}
 	}
 
-	subContainer, lastContainer := ah.generateSubContainers(container, blobPrefix)
+	subContainer, lastContainer := ah.generateSubContainers(simpleContainer, blobPrefix)
 
 	if subContainer != nil {
-		container.ContainerSlice = append(container.ContainerSlice, subContainer)
+		simpleContainer.ContainerSlice = append(simpleContainer.ContainerSlice, subContainer)
 	}
 
 	// return the "deepest" container.
 	return lastContainer, nil
+}
+
+
+// Get container... or create a new one.
+func (ah *AzureHandler) getOrCreateContainer(containerName string) (*storage.ContainerURL, error) {
+
+	containerURL := ah.serviceURL.NewContainerURL( containerName)
+	ctx := context.Background() // This example uses a never-expiring context
+	_, err := containerURL.Create(ctx, storage.Metadata{}, storage.PublicAccessNone)
+
+	if serr, ok := err.(storage.StorageError); ok { // This error is a Service-specific error
+		if serr.ServiceCode() != storage.ServiceCodeContainerAlreadyExists {
+		  return nil, err
+		}
+	}
+
+	return &containerURL, nil
 }
 
 // GetContainerContentsOverChannel given a URL (ending in /) returns all the contents of the container over a channel
@@ -162,16 +184,25 @@ func (ah *AzureHandler) GetContainerContentsOverChannel(sourceContainer models.S
 
 	azureContainer, blobPrefix := containerutils.GetContainerAndBlobPrefix(&sourceContainer)
 
+	containerURL := ah.serviceURL.NewContainerURL(azureContainer.Name)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
+	defer cancel()
+
+
+	marker := storage.Marker{}
+
 	// now we have the azure container and the prefix, we should be able to get a list of
 	// SimpleContainers and SimpleBlobs to add this to original container.
 	// Keep max results to 1000, can loop through and
-	params := storage.ListBlobsParameters{Prefix: blobPrefix, MaxResults: 1000}
+	// params := storage.ListBlobsParameters{Prefix: blobPrefix, MaxResults: 1000}
 	done := false
 	for done == false {
 		// copy of container, dont want to send back ever growing container via the channel.
 		containerClone := sourceContainer
-		azureContainer := ah.blobStorageClient.GetContainerReference(azureContainer.Name)
-		blobListResponse, err := azureContainer.ListBlobs(params)
+
+    	//azureContainer := ah.blobStorageClient.GetContainerReference(azureContainer.Name)
+		blobListResponse, err := containerURL.ListBlobs( ctx, marker, storage.ListBlobsOptions{ Prefix: blobPrefix})
 		if err != nil {
 			log.Fatal("Error")
 		}
@@ -182,8 +213,8 @@ func (ah *AzureHandler) GetContainerContentsOverChannel(sourceContainer models.S
 		blobChannel <- containerClone
 
 		// if marker, then keep going.
-		if blobListResponse.NextMarker != "" {
-			params.Marker = blobListResponse.NextMarker
+		if blobListResponse.NextMarker.NotDone() {
+			marker = blobListResponse.NextMarker
 		} else {
 			done = true
 		}
@@ -232,7 +263,7 @@ func (ah *AzureHandler) generateSubContainers(azureContainer *models.SimpleConta
 	return containerToReturn, lastContainer
 }
 
-func (ah *AzureHandler) getAzureContainer(containerName string) (*models.SimpleContainer, error) {
+func (ah *AzureHandler) getAzureContainerAsSimpleContainer(containerName string) (*models.SimpleContainer, error) {
 
 	rootContainer := ah.GetRootContainer()
 
@@ -256,26 +287,26 @@ func (ah *AzureHandler) GetSpecificSimpleBlob(URL string) (*models.SimpleBlob, e
 	if URL[len(URL)-2:len(URL)-1] == "/" {
 		return nil, errors.New("Cannot end with a /")
 	}
-	_, containerName, blobName, err := ah.validateURL(URL)
+	_, containerName, blobName, pretendBlobName, err := ah.validateURL(URL)
 	if err != nil {
 		return nil, err
 	}
 
-	container := ah.blobStorageClient.GetContainerReference(containerName)
-	blob := container.GetBlobReference(blobName)
-	simpleContainer, err := ah.getAzureContainer(containerName)
+	simpleContainer, err := ah.getAzureContainerAsSimpleContainer(containerName)
 
 	b := models.SimpleBlob{}
-	b.Name = blob.Name
+
+	// if we're talking vdir1/vdir2/blobname then b.Name should be "blobname"
+	b.Name = pretendBlobName
 	b.Origin = models.Azure
 	b.ParentContainer = simpleContainer
-	b.BlobCloudName = blob.Name
+	b.BlobCloudName = blobName
 	return &b, nil
 }
 
 // validateURL returns accountName, container Name, blob Name and error
-// passes real URL such as https://myacct.blob.core.windows.net/mycontainer/blobPrefix
-func (ah *AzureHandler) validateURL(URL string) (string, string, string, error) {
+// passes real URL such as https://myacct.blob.core.windows.net/mycontainer/vdir1/vdir2/blobPrefix
+func (ah *AzureHandler) validateURL(URL string) (string, string, string, string, error) {
 
 	lowerURL := strings.ToLower(URL)
 
@@ -309,7 +340,8 @@ func (ah *AzureHandler) validateURL(URL string) (string, string, string, error) 
 		blobName = strings.Join(sp[3:], "/")
 	}
 
-	return accountName, containerName, blobName, nil
+	pretendBlobName := sp[ len(sp) -1]
+	return accountName, containerName, blobName,pretendBlobName, nil
 }
 
 // ReadBlob reads a blob of a given name from a particular SimpleContainer and returns the SimpleBlob
@@ -324,18 +356,30 @@ func (ah *AzureHandler) ReadBlob(container models.SimpleContainer, blobName stri
 }
 
 // PopulateBlob. Used to read a blob IFF we already have a reference to it.
+func (ah *AzureHandler) getBlobURL( containerName string, azureBlobName string) (*storage.BlobURL, error) {
+	containerURL := ah.serviceURL.NewContainerURL(containerName)
+	blobURL := containerURL.NewBlobURL(azureBlobName)
+
+	return &blobURL, nil
+}
+
+// PopulateBlob. Used to read a blob IFF we already have a reference to it.
 func (ah *AzureHandler) PopulateBlob(blob *models.SimpleBlob) error {
 	azureContainerName := ah.generateAzureContainerName(*blob)
 	azureBlobName := blob.BlobCloudName
 
-	azureContainer := ah.blobStorageClient.GetContainerReference(azureContainerName)
-	azureBlob := azureContainer.GetBlobReference(azureBlobName)
-	sr, err := azureBlob.Get(nil)
+	containerURL := ah.serviceURL.NewContainerURL(azureContainerName)
+	blobURL := containerURL.NewBlobURL(azureBlobName)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
+	defer cancel()
+
+
+	resp, err := blobURL.GetBlob(ctx, storage.BlobRange{}, storage.BlobAccessConditions{}, false)
 	if err != nil {
-		log.Fatal(err)
-		return err
+		return  err
 	}
-	defer sr.Close()
+	defer resp.Body().Close()
 
 	// file stream for cache.
 	var cacheFile *os.File
@@ -363,7 +407,7 @@ func (ah *AzureHandler) PopulateBlob(blob *models.SimpleBlob) error {
 
 	finishedProcessing := false
 	for finishedProcessing == false {
-		numBytesRead, err = sr.Read(buffer)
+		numBytesRead, err = resp.Body().Read(buffer)
 		if err != nil {
 			finishedProcessing = true
 		}
@@ -453,8 +497,7 @@ func (ah *AzureHandler) getContainerAndBlobNames(destContainer *models.SimpleCon
 func (ah *AzureHandler) writeBlobFromCache(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
 	azureContainerName, azureBlobName := ah.getContainerAndBlobNames(destContainer, sourceBlob.Name)
 
-	containerReference := ah.blobStorageClient.GetContainerReference(azureContainerName)
-	_, err := containerReference.CreateIfNotExists(nil)
+	_, err := ah.getOrCreateContainer( azureContainerName)
 	if err != nil {
 		log.Fatal(err)
 		return err
@@ -507,8 +550,8 @@ func (ah *AzureHandler) writeBlobFromCache(destContainer *models.SimpleContainer
 func (ah *AzureHandler) writeBlobFromMemory(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
 
 	azureContainerName, azureBlobName := ah.getContainerAndBlobNames(destContainer, sourceBlob.Name)
-	containerRef := ah.blobStorageClient.GetContainerReference(azureContainerName)
-	_, err := containerRef.CreateIfNotExists(nil)
+
+	_, err := ah.getOrCreateContainer(azureContainerName)
 	if err != nil {
 		log.Fatal(err)
 		return err
@@ -553,25 +596,15 @@ func (ah *AzureHandler) writeBlobFromMemory(destContainer *models.SimpleContaine
 func (ah *AzureHandler) putBlockIDList(containerName string, blobName string, blockIDList []string) error {
 
 	log.Debugf("putBlockIDList container %s: blobName %s", containerName, blobName)
-	blockSlice := ah.generateBlockSlice(blockIDList)
-	container := ah.blobStorageClient.GetContainerReference(containerName)
-	blob := container.GetBlobReference(blobName)
-	if err := blob.PutBlockList(blockSlice, nil); err != nil {
-		log.Fatal("putBlockIDList failed ", err)
-	}
 
-	return nil
-}
+	containerURL := ah.serviceURL.NewContainerURL(containerName)
+	blobURL := containerURL.NewBlockBlobURL(blobName)
 
-func (ah *AzureHandler) generateBlockSlice(blockIDList []string) []storage.Block {
-	blockSlice := []storage.Block{}
-	for _, block := range blockIDList {
-		b := storage.Block{}
-		b.ID = block
-		b.Status = storage.BlockStatusLatest
-		blockSlice = append(blockSlice, b)
-	}
-	return blockSlice
+	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
+	defer cancel()
+	_, err := blobURL.PutBlockList(ctx, blockIDList, storage.BlobHTTPHeaders{}, storage.Metadata{}, storage.BlobAccessConditions{})
+	return err
+
 }
 
 func (ah *AzureHandler) writeMemoryToBlob(containerName string, blobName string, buffer []byte) (string, error) {
@@ -585,11 +618,16 @@ func (ah *AzureHandler) writeMemoryToBlob(containerName string, blobName string,
 	blockID = fmt.Sprintf("%s", uuid.NewV1())
 
 	blockID = base64.StdEncoding.EncodeToString([]byte(blockID))
-	container := ah.blobStorageClient.GetContainerReference(containerName)
-	blob := container.GetBlobReference(blobName)
+
+	containerURL := ah.serviceURL.NewContainerURL(containerName)
+	blobURL := containerURL.NewBlockBlobURL(blobName)
 	log.Debugf("blockID %s", blockID)
-	//log.Fatal("BANG")
-	err := blob.PutBlock(blockID, buffer, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
+	defer cancel()
+
+	_, err := blobURL.PutBlock(ctx, blockID, bytes.NewReader(buffer), storage.LeaseAccessConditions{})
+
 	if err != nil {
 		log.Fatal("Unable to PutBlock ", blockID)
 	}
@@ -602,12 +640,13 @@ func (ah *AzureHandler) writeMemoryToBlob(containerName string, blobName string,
 func (ah *AzureHandler) CreateContainer(containerName string) (models.SimpleContainer, error) {
 	var container models.SimpleContainer
 
-	containerRef := ah.blobStorageClient.GetContainerReference(containerName)
-	err := containerRef.Create(nil)
+	_, err := ah.getOrCreateContainer(containerName)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	// dont get it...  creates an empty simplecontainer...  this needs to be relooked at!
+	// only command uses it and discards it straight away, so might be ok.
 	return container, nil
 }
 
@@ -633,10 +672,10 @@ func (ah *AzureHandler) GetContainerContents(container *models.SimpleContainer) 
 
 	// now we have the azure container and the prefix, we should be able to get a list of
 	// SimpleContainers and SimpleBlobs to add this to original container.
-	params := storage.ListBlobsParameters{Prefix: blobPrefix}
-	containerRef := ah.blobStorageClient.GetContainerReference(azureContainer.Name)
+	containerURL := ah.serviceURL.NewContainerURL(azureContainer.Name)
+	ctx := context.Background() // This example uses a never-expiring context
 
-	blobListResponse, err := containerRef.ListBlobs(params)
+	blobListResponse, err := containerURL.ListBlobs(ctx, storage.Marker{}, storage.ListBlobsOptions{Prefix: blobPrefix}  )
 	if err != nil {
 		log.Fatal("Error")
 	}
@@ -653,9 +692,9 @@ func (ah *AzureHandler) GetContainerContents(container *models.SimpleContainer) 
 // vdir1/blob2
 // vdir1/vdir3/blob3
 // blob4
-func (ah *AzureHandler) populateSimpleContainer(blobListResponse storage.BlobListResponse, container *models.SimpleContainer, blobPrefix string) {
+func (ah *AzureHandler) populateSimpleContainer(blobListResponse *storage.ListBlobsResponse, container *models.SimpleContainer, blobPrefix string) {
 
-	for _, blob := range blobListResponse.Blobs {
+	for _, blob := range blobListResponse.Blobs.Blob {
 
 		log.Debugf("populateSimpleContainer blob %s", blob.Name)
 		sp := strings.Split(blob.Name, "/")
@@ -691,9 +730,10 @@ func (ah *AzureHandler) populateSimpleContainer(blobListResponse storage.BlobLis
 			b.Origin = container.Origin
 			b.ParentContainer = container
 			b.BlobCloudName = blob.Name // cloud specific name... ie the REAL name.
-			container := ah.blobStorageClient.GetContainerReference(container.Name)
-			azureBlob := container.GetBlobReference(blob.Name)
-			b.URL = azureBlob.GetURL()
+
+			containerURL := ah.serviceURL.NewContainerURL(container.Name)
+			blobURL := containerURL.NewBlobURL(blob.Name)
+			b.URL = blobURL.String()
 			currentContainer.BlobSlice = append(currentContainer.BlobSlice, &b)
 			currentContainer.Populated = true
 		}

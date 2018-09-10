@@ -8,7 +8,6 @@ import (
 	"os"
 	"path"
 
-	"github.com/Azure/azure-storage-go"
 	log "github.com/Sirupsen/logrus"
 )
 
@@ -312,17 +311,6 @@ func (fh *FilesystemHandler) GetContainerContents(container *models.SimpleContai
 	container.Populated = true
 
 	return nil
-}
-
-// populateSimpleContainer takes a list of Azure blobs and breaks them into virtual directories (SimpleContainers) and
-// SimpleBlob trees.
-//
-// vdir1/vdir2/blob1
-// vdir1/blob2
-// vdir1/vdir3/blob3
-// blob4
-func (fh *FilesystemHandler) populateSimpleContainer(blobListResponse storage.BlobListResponse, container *models.SimpleContainer) {
-
 }
 
 // BlobExists checks if blob already exists

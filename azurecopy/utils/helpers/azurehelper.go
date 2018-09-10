@@ -1,18 +1,9 @@
 package helpers
 
-import (
-	"azurecopy/azurecopy/models"
-	"azurecopy/azurecopy/utils/containerutils"
-
-	"github.com/Azure/azure-storage-go"
-
-	log "github.com/Sirupsen/logrus"
-)
-
 type AzureHelper struct {
-	client storage.BlobStorageClient
 }
 
+/*
 func NewAzureHelper(accountName string, accountKey string) *AzureHelper {
 
 	ah := new(AzureHelper)
@@ -46,3 +37,9 @@ func (ah *AzureHelper) DoCopyBlobUsingAzureCopyBlobFlag(url string, destContaine
 	}
 	return nil
 }
+
+// TODO(kpfaulkner) revisit and find a better way, but new client for now isn't completely terrible.
+func (ah *AzureHelper) GetOrCreateContainer(containerName string) (storage.ContainerURL, error) {
+
+}
+*/

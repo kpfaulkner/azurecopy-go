@@ -4,7 +4,7 @@ import (
 	"azurecopy/azurecopy/handlers"
 	"azurecopy/azurecopy/models"
 	"azurecopy/azurecopy/utils"
-	"azurecopy/azurecopy/utils/helpers"
+//	"azurecopy/azurecopy/utils/helpers"
 	"azurecopy/azurecopy/utils/misc"
 	"fmt"
 	"regexp"
@@ -339,9 +339,9 @@ func (ac *AzureCopy) copyBlobFromChannelUsingCopyBlobFlag(destContainer *models.
 
 	defer wg.Done()
 
-	azureAccountName, azureAccountKey := utils.GetAzureCredentials(false, ac.config)
+	//azureAccountName, azureAccountKey := utils.GetAzureCredentials(false, ac.config)
 
-	azureHelper := helpers.NewAzureHelper(azureAccountName, azureAccountKey)
+//	azureHelper := helpers.NewAzureHelper(azureAccountName, azureAccountKey)
 
 	for {
 		blob, ok := <-copyChannel
@@ -371,8 +371,9 @@ func (ac *AzureCopy) copyBlobFromChannelUsingCopyBlobFlag(destContainer *models.
 			continue
 		}
 
+		fmt.Printf("displaying url just for the fun of it %s\n", url)
 		fmt.Printf("Copying %s to %s\n", blob.Name, destContainer.Name+"/"+blob.DestName)
-		azureHelper.DoCopyBlobUsingAzureCopyBlobFlag(url, destContainer, blob.DestName)
+		//azureHelper.DoCopyBlobUsingAzureCopyBlobFlag(url, destContainer, blob.DestName)
 	}
 
 }
@@ -452,7 +453,8 @@ func (ac *AzureCopy) WriteBlob(destContainer *models.SimpleContainer, sourceBlob
 	}
 
 	// if cached delete the cache.
-	if !sourceBlob.BlobInMemory && ac.config.Command != misc.CommandCopyBlob {
+	// make sure dont delete if just simply read from local filesystem (due to source being local file)
+	if !sourceBlob.BlobInMemory && ac.config.Command != misc.CommandCopyBlob && sourceBlob.Origin != models.Filesystem {
 		log.Debugf("About to delete cache file %s", sourceBlob.DataCachedAtPath)
 		err := os.Remove(sourceBlob.DataCachedAtPath)
 		if err != nil {

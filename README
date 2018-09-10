@@ -1,10 +1,7 @@
 AzureCopy (Go version)
 
 This is a reimplementation of the AzureCopy project (github.com/kpfaulkner/azurecopy) in the GO language.
-It is primarily to allow cross platform (Linux/MacOS and Windows) versions of it.
-
-I've had numerous requests for Linux versions, so thought I might as well give it a stab.
-Currently the plan is:
+It is primarily to allow cross platform (Linux,*BSD, MacOS and Windows) versions of it.
 
 
 - Copy to/from Filesystem (done)

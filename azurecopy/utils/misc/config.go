@@ -54,6 +54,8 @@ type CloudConfig struct {
 
 	Command int // command we're executing
 
+	SimpleOutput bool // want simple output (URLs) or tree displays.
+
 	Replace bool // will replace at destination
 
 	Version bool // display version

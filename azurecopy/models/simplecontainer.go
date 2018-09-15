@@ -74,6 +74,19 @@ func (sc *SimpleContainer) GetContainer(containerName string) (*SimpleContainer,
 	return nil, err
 }
 
+
+func (sc *SimpleContainer) DisplayContainerURLsOnly() {
+
+
+	for _, b := range sc.BlobSlice {
+		fmt.Println(b.URL)
+	}
+
+	for _, c := range sc.ContainerSlice {
+		c.DisplayContainerURLsOnly()
+	}
+}
+
 func (sc *SimpleContainer) DisplayContainer(padding string) {
 
 	fmt.Println("+" + padding + sc.Name)

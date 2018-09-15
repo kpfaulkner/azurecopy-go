@@ -88,6 +88,8 @@ func setupConfiguration() *misc.CloudConfig {
 	var listCommand = flag.Bool("list", false, "List contents from source")
 	var createContainerCommand = flag.String("createcontainer", "", "Create container for destination")
 
+	var simpleOutput = flag.Bool("simpleoutput", false, "Simple output, URLs over trees")
+
 	var replace = flag.Bool("replace", true, "Replace blob if already exists")
 
 	var azureDefaultAccountName = flag.String("AzureDefaultAccountName", "", "Default Azure Account Name")
@@ -123,6 +125,7 @@ func setupConfiguration() *misc.CloudConfig {
 		config.Configuration[misc.Source] = *source
 		config.Configuration[misc.Dest] = *dest
 		config.Replace = *replace
+		config.SimpleOutput = *simpleOutput
 		config.ConcurrentCount = *concurrentCount
 		config.Configuration[misc.CreateContainerName] = *createContainerCommand
 
@@ -183,13 +186,17 @@ func main() {
 		break
 
 	case misc.CommandList:
-		container, err := ac.ListContainer()
+		container, err := ac.ListContainer( )
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		log.Debug("List results")
-		container.DisplayContainer("")
+		if config.SimpleOutput {
+			container.DisplayContainerURLsOnly()
+		} else {
+			container.DisplayContainer("")
+		}
 		break
 
 	case misc.CommandCreateContainer:

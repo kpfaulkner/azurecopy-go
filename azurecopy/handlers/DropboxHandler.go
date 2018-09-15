@@ -631,7 +631,6 @@ func (dh *DropboxHandler) GetContainer(containerName string) models.SimpleContai
 // Can determine if the SimpleContainer is a real container or something virtual.
 // We need to trace back to the root node and determine what is really a container and
 // what is a blob.
-
 // need to populate....   for Dropbox GetSpecificSimpleContainer is doing too much already!
 func (dh *DropboxHandler) GetContainerContents(container *models.SimpleContainer) error {
 

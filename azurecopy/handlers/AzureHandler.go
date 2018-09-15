@@ -71,12 +71,6 @@ func NewAzureHandler(accountName string, accountKey string, isSource bool, cache
 	return ah, nil
 }
 
-// DoCopyBlobUsingAzureCopyBlobFlag copy using Azure CopyBlob flag.
-func (ah *AzureHandler) DoCopyBlobUsingAzureCopyBlobFlag(sourceBlob *models.SimpleBlob, destContainer *models.SimpleContainer, destBlobName string) error {
-
-	return nil
-}
-
 // GetRootContainer gets root container of Azure. In reality there isn't a root container, but this would basically be a SimpleContainer
 // that has the containerSlice populated with the real Azure containers.
 func (ah *AzureHandler) GetRootContainer() models.SimpleContainer {
@@ -161,23 +155,6 @@ func (ah *AzureHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleCo
 	return lastContainer, nil
 }
 
-
-// Get container... or create a new one.
-func (ah *AzureHandler) getOrCreateContainer(containerName string) (*storage.ContainerURL, error) {
-
-	containerURL := ah.serviceURL.NewContainerURL( containerName)
-	ctx := context.Background() // This example uses a never-expiring context
-	_, err := containerURL.Create(ctx, storage.Metadata{}, storage.PublicAccessNone)
-
-	if serr, ok := err.(storage.StorageError); ok { // This error is a Service-specific error
-		if serr.ServiceCode() != storage.ServiceCodeContainerAlreadyExists {
-		  return nil, err
-		}
-	}
-
-	return &containerURL, nil
-}
-
 // GetContainerContentsOverChannel given a URL (ending in /) returns all the contents of the container over a channel
 // This returns a COPY of the original source container but has been populated with *some* of the blobs/subcontainers in it.
 func (ah *AzureHandler) GetContainerContentsOverChannel(sourceContainer models.SimpleContainer, blobChannel chan models.SimpleContainer) error {
@@ -188,7 +165,6 @@ func (ah *AzureHandler) GetContainerContentsOverChannel(sourceContainer models.S
 
 	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
 	defer cancel()
-
 
 	marker := storage.Marker{}
 
@@ -201,7 +177,7 @@ func (ah *AzureHandler) GetContainerContentsOverChannel(sourceContainer models.S
 		// copy of container, dont want to send back ever growing container via the channel.
 		containerClone := sourceContainer
 
-    	//azureContainer := ah.blobStorageClient.GetContainerReference(azureContainer.Name)
+		//azureContainer := ah.blobStorageClient.GetContainerReference(azureContainer.Name)
 		blobListResponse, err := containerURL.ListBlobs( ctx, marker, storage.ListBlobsOptions{ Prefix: blobPrefix})
 		if err != nil {
 			log.Fatal("Error")
@@ -226,55 +202,6 @@ func (ah *AzureHandler) GetContainerContentsOverChannel(sourceContainer models.S
 
 func (ah *AzureHandler) GeneratePresignedURL(blob *models.SimpleBlob) (string, error) {
 	return "", nil
-}
-
-func (ah *AzureHandler) generateSubContainers(azureContainer *models.SimpleContainer, blobPrefix string) (*models.SimpleContainer, *models.SimpleContainer) {
-
-	var containerToReturn *models.SimpleContainer
-	var lastContainer *models.SimpleContainer
-	doneFirst := false
-
-	// strip off last /
-	if len(blobPrefix) > 0 {
-		blobPrefix = blobPrefix[:len(blobPrefix)-1]
-		sp := strings.Split(blobPrefix, "/")
-
-		for _, segment := range sp {
-			container := models.NewSimpleContainer()
-			container.Name = segment
-			if !doneFirst {
-				container.ParentContainer = azureContainer
-				containerToReturn = container
-				doneFirst = true
-			} else {
-				container.ParentContainer = lastContainer
-				lastContainer.ContainerSlice = append(lastContainer.ContainerSlice, container)
-			}
-
-			lastContainer = container
-		}
-	} else {
-
-		// just return existing container (lastContainer) and no subcontainer (containerToReturn)
-		containerToReturn = nil
-		lastContainer = azureContainer
-	}
-
-	return containerToReturn, lastContainer
-}
-
-func (ah *AzureHandler) getAzureContainerAsSimpleContainer(containerName string) (*models.SimpleContainer, error) {
-
-	rootContainer := ah.GetRootContainer()
-
-	for _, container := range rootContainer.ContainerSlice {
-		if container.Name == containerName {
-			return container, nil
-		}
-	}
-
-	return nil, errors.New("Unable to find container")
-
 }
 
 // GetSpecificSimpleBlob given a URL (NOT ending in /) then get the SIMPLE blob that represents it.
@@ -304,46 +231,6 @@ func (ah *AzureHandler) GetSpecificSimpleBlob(URL string) (*models.SimpleBlob, e
 	return &b, nil
 }
 
-// validateURL returns accountName, container Name, blob Name and error
-// passes real URL such as https://myacct.blob.core.windows.net/mycontainer/vdir1/vdir2/blobPrefix
-func (ah *AzureHandler) validateURL(URL string) (string, string, string, string, error) {
-
-	lowerURL := strings.ToLower(URL)
-
-	// ugly, do this properly!!! TODO(kpfaulkner)
-	pruneCount := 0
-	match, _ := regexp.MatchString("http://", lowerURL)
-	if match {
-		pruneCount = 7
-	}
-
-	match, _ = regexp.MatchString("https://", lowerURL)
-	if match {
-		pruneCount = 8
-	}
-
-	// trim protocol
-	URL = URL[pruneCount:]
-	sp := strings.Split(URL, "/")
-
-	sp2 := strings.Split(sp[0], ".")
-	accountName := sp2[0]
-
-	var containerName string
-	var blobName string
-
-	if !ah.IsEmulator {
-		containerName = sp[1]
-		blobName = strings.Join(sp[2:], "/")
-	} else {
-		containerName = sp[2]
-		blobName = strings.Join(sp[3:], "/")
-	}
-
-	pretendBlobName := sp[ len(sp) -1]
-	return accountName, containerName, blobName,pretendBlobName, nil
-}
-
 // ReadBlob reads a blob of a given name from a particular SimpleContainer and returns the SimpleBlob
 // The SimpleContainer is NOT necessarily a direct mapping to an Azure container but may be representing a virtual directory.
 // ie we might have RootSimpleContainer -> SimpleContainer(myrealcontainer) -> SimpleContainer(vdir1) -> SimpleContainer(vdir2)
@@ -353,14 +240,6 @@ func (ah *AzureHandler) ReadBlob(container models.SimpleContainer, blobName stri
 	var blob models.SimpleBlob
 
 	return blob
-}
-
-// PopulateBlob. Used to read a blob IFF we already have a reference to it.
-func (ah *AzureHandler) getBlobURL( containerName string, azureBlobName string) (*storage.BlobURL, error) {
-	containerURL := ah.serviceURL.NewContainerURL(containerName)
-	blobURL := containerURL.NewBlobURL(azureBlobName)
-
-	return &blobURL, nil
 }
 
 // PopulateBlob. Used to read a blob IFF we already have a reference to it.
@@ -434,16 +313,6 @@ func (ah *AzureHandler) PopulateBlob(blob *models.SimpleBlob) error {
 	return nil
 }
 
-// generateAzureContainerName gets the REAL Azure container name for the simpleBlob
-func (ah *AzureHandler) generateAzureContainerName(blob models.SimpleBlob) string {
-	currentContainer := blob.ParentContainer
-
-	for currentContainer.ParentContainer != nil {
-		currentContainer = currentContainer.ParentContainer
-	}
-	return currentContainer.Name
-}
-
 func (ah *AzureHandler) WriteContainer(sourceContainer *models.SimpleContainer, destContainer *models.SimpleContainer) error {
 	return nil
 }
@@ -471,6 +340,190 @@ func (ah *AzureHandler) WriteBlob(destContainer *models.SimpleContainer, sourceB
 
 	return nil
 }
+
+// CreateContainer creates an Azure container.
+// ie will only do ROOT level containers (ie REAL Azure container)
+func (ah *AzureHandler) CreateContainer(containerName string) (models.SimpleContainer, error) {
+	var container models.SimpleContainer
+
+	_, err := ah.getOrCreateContainer(containerName)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// dont get it...  creates an empty simplecontainer...  this needs to be relooked at!
+	// only command uses it and discards it straight away, so might be ok.
+	return container, nil
+}
+
+// GetContainer gets a container. Populating the subtree? OR NOT? hmmmm
+func (ah *AzureHandler) GetContainer(containerName string) models.SimpleContainer {
+	var container models.SimpleContainer
+
+	return container
+}
+
+// GetContainerContents populates the passed container with the real contents.
+// Can determine if the SimpleContainer is a real container or something virtual.
+// We need to trace back to the root node and determine what is really a container and
+// what is a blob.
+//
+// For Azure only the children of the root node can be a real azure container. Everything else
+// is a blob or a blob pretending to have vdirs.
+//
+// TODO(kpfaulkner) use marker and get next lot of results when we have > 5000 blobs.
+func (ah *AzureHandler) GetContainerContents(container *models.SimpleContainer) error {
+
+	azureContainer, blobPrefix := containerutils.GetContainerAndBlobPrefix(container)
+
+	// now we have the azure container and the prefix, we should be able to get a list of
+	// SimpleContainers and SimpleBlobs to add this to original container.
+	containerURL := ah.serviceURL.NewContainerURL(azureContainer.Name)
+	ctx := context.Background() // This example uses a never-expiring context
+
+	blobListResponse, err := containerURL.ListBlobs(ctx, storage.Marker{}, storage.ListBlobsOptions{Prefix: blobPrefix}  )
+	if err != nil {
+		log.Fatal("Error")
+	}
+
+	ah.populateSimpleContainer(blobListResponse, azureContainer, blobPrefix)
+
+	return nil
+}
+
+// DoCopyBlobUsingAzureCopyBlobFlag copy using Azure CopyBlob flag.
+func (ah *AzureHandler) DoCopyBlobUsingAzureCopyBlobFlag(sourceBlob *models.SimpleBlob, destContainer *models.SimpleContainer, destBlobName string) error {
+
+	return nil
+}
+
+// Get container... or create a new one.
+func (ah *AzureHandler) getOrCreateContainer(containerName string) (*storage.ContainerURL, error) {
+
+	containerURL := ah.serviceURL.NewContainerURL( containerName)
+	ctx := context.Background() // This example uses a never-expiring context
+	_, err := containerURL.Create(ctx, storage.Metadata{}, storage.PublicAccessNone)
+
+	if serr, ok := err.(storage.StorageError); ok { // This error is a Service-specific error
+		if serr.ServiceCode() != storage.ServiceCodeContainerAlreadyExists {
+		  return nil, err
+		}
+	}
+
+	return &containerURL, nil
+}
+
+func (ah *AzureHandler) generateSubContainers(azureContainer *models.SimpleContainer, blobPrefix string) (*models.SimpleContainer, *models.SimpleContainer) {
+
+	var containerToReturn *models.SimpleContainer
+	var lastContainer *models.SimpleContainer
+	doneFirst := false
+
+	// strip off last /
+	if len(blobPrefix) > 0 {
+		blobPrefix = blobPrefix[:len(blobPrefix)-1]
+		sp := strings.Split(blobPrefix, "/")
+
+		for _, segment := range sp {
+			container := models.NewSimpleContainer()
+			container.Name = segment
+			if !doneFirst {
+				container.ParentContainer = azureContainer
+				containerToReturn = container
+				doneFirst = true
+			} else {
+				container.ParentContainer = lastContainer
+				lastContainer.ContainerSlice = append(lastContainer.ContainerSlice, container)
+			}
+
+			lastContainer = container
+		}
+	} else {
+
+		// just return existing container (lastContainer) and no subcontainer (containerToReturn)
+		containerToReturn = nil
+		lastContainer = azureContainer
+	}
+
+	return containerToReturn, lastContainer
+}
+
+func (ah *AzureHandler) getAzureContainerAsSimpleContainer(containerName string) (*models.SimpleContainer, error) {
+
+	rootContainer := ah.GetRootContainer()
+
+	for _, container := range rootContainer.ContainerSlice {
+		if container.Name == containerName {
+			return container, nil
+		}
+	}
+
+	return nil, errors.New("Unable to find container")
+
+}
+
+
+
+// validateURL returns accountName, container Name, blob Name and error
+// passes real URL such as https://myacct.blob.core.windows.net/mycontainer/vdir1/vdir2/blobPrefix
+func (ah *AzureHandler) validateURL(URL string) (string, string, string, string, error) {
+
+	lowerURL := strings.ToLower(URL)
+
+	// ugly, do this properly!!! TODO(kpfaulkner)
+	pruneCount := 0
+	match, _ := regexp.MatchString("http://", lowerURL)
+	if match {
+		pruneCount = 7
+	}
+
+	match, _ = regexp.MatchString("https://", lowerURL)
+	if match {
+		pruneCount = 8
+	}
+
+	// trim protocol
+	URL = URL[pruneCount:]
+	sp := strings.Split(URL, "/")
+
+	sp2 := strings.Split(sp[0], ".")
+	accountName := sp2[0]
+
+	var containerName string
+	var blobName string
+
+	if !ah.IsEmulator {
+		containerName = sp[1]
+		blobName = strings.Join(sp[2:], "/")
+	} else {
+		containerName = sp[2]
+		blobName = strings.Join(sp[3:], "/")
+	}
+
+	pretendBlobName := sp[ len(sp) -1]
+	return accountName, containerName, blobName,pretendBlobName, nil
+}
+
+
+// PopulateBlob. Used to read a blob IFF we already have a reference to it.
+func (ah *AzureHandler) getBlobURL( containerName string, azureBlobName string) (*storage.BlobURL, error) {
+	containerURL := ah.serviceURL.NewContainerURL(containerName)
+	blobURL := containerURL.NewBlobURL(azureBlobName)
+
+	return &blobURL, nil
+}
+
+// generateAzureContainerName gets the REAL Azure container name for the simpleBlob
+func (ah *AzureHandler) generateAzureContainerName(blob models.SimpleBlob) string {
+	currentContainer := blob.ParentContainer
+
+	for currentContainer.ParentContainer != nil {
+		currentContainer = currentContainer.ParentContainer
+	}
+	return currentContainer.Name
+}
+
+
 
 func (ah *AzureHandler) getContainerAndBlobNames(destContainer *models.SimpleContainer, sourceBlobName string) (string, string) {
 
@@ -635,55 +688,6 @@ func (ah *AzureHandler) writeMemoryToBlob(containerName string, blobName string,
 	return blockID, nil
 }
 
-// CreateContainer creates an Azure container.
-// ie will only do ROOT level containers (ie REAL Azure container)
-func (ah *AzureHandler) CreateContainer(containerName string) (models.SimpleContainer, error) {
-	var container models.SimpleContainer
-
-	_, err := ah.getOrCreateContainer(containerName)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// dont get it...  creates an empty simplecontainer...  this needs to be relooked at!
-	// only command uses it and discards it straight away, so might be ok.
-	return container, nil
-}
-
-// GetContainer gets a container. Populating the subtree? OR NOT? hmmmm
-func (ah *AzureHandler) GetContainer(containerName string) models.SimpleContainer {
-	var container models.SimpleContainer
-
-	return container
-}
-
-// GetContainerContents populates the passed container with the real contents.
-// Can determine if the SimpleContainer is a real container or something virtual.
-// We need to trace back to the root node and determine what is really a container and
-// what is a blob.
-//
-// For Azure only the children of the root node can be a real azure container. Everything else
-// is a blob or a blob pretending to have vdirs.
-//
-// TODO(kpfaulkner) use marker and get next lot of results when we have > 5000 blobs.
-func (ah *AzureHandler) GetContainerContents(container *models.SimpleContainer) error {
-
-	azureContainer, blobPrefix := containerutils.GetContainerAndBlobPrefix(container)
-
-	// now we have the azure container and the prefix, we should be able to get a list of
-	// SimpleContainers and SimpleBlobs to add this to original container.
-	containerURL := ah.serviceURL.NewContainerURL(azureContainer.Name)
-	ctx := context.Background() // This example uses a never-expiring context
-
-	blobListResponse, err := containerURL.ListBlobs(ctx, storage.Marker{}, storage.ListBlobsOptions{Prefix: blobPrefix}  )
-	if err != nil {
-		log.Fatal("Error")
-	}
-
-	ah.populateSimpleContainer(blobListResponse, azureContainer, blobPrefix)
-
-	return nil
-}
 
 // populateSimpleContainer takes a list of Azure blobs and breaks them into virtual directories (SimpleContainers) and
 // SimpleBlob trees.

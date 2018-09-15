@@ -110,7 +110,9 @@ func SetupConnection() (*dropbox.Config, error) {
 		log.Debugf("Already have Dropbox token")
 	}
 
-	config := dropbox.Config{tokens[tokType], true, "", domain}
+	config := dropbox.Config{tokens[tokType], dropbox.LogOff, nil, "", domain, nil, nil, nil}
+
+	//config := dropbox.Config{tokens[tokType], true, "", domain}
 
 	return &config, nil
 }

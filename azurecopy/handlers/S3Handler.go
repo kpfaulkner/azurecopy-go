@@ -73,7 +73,6 @@ func (sh *S3Handler) GetRootContainer() models.SimpleContainer {
 		sc := models.NewSimpleContainer()
 		sc.Name = *bucket.Name
 		sc.Origin = models.S3
-
 		rootContainer.ContainerSlice = append(rootContainer.ContainerSlice, sc)
 	}
 
@@ -82,92 +81,14 @@ func (sh *S3Handler) GetRootContainer() models.SimpleContainer {
 
 // BlobExists checks if blob exists
 func (sh *S3Handler) BlobExists(container models.SimpleContainer, blobName string) (bool, error) {
+	// TODO(kpfaulkner) implement me!!!
 	return false, nil
 }
 
 // convertURL converts from https://bucketname.s3.amazonaws.com/myblob to https://s3.amazonaws.com/bucketname/myblob format
 func (sh *S3Handler) convertURL(URL string) string {
-
 	// TODO(kpfaulkner) implement me!!!
 	return URL
-
-}
-
-// populateSimpleContainer takes a list of Azure blobs and breaks them into virtual directories (SimpleContainers) and
-// SimpleBlob trees.
-//
-// vdir1/vdir2/blob1
-// vdir1/blob2
-// vdir1/vdir3/blob3
-// blob3
-func (sh *S3Handler) populateSimpleContainer(s3Objects []*s3.Object, container *models.SimpleContainer, blobPrefix string) {
-
-	log.Debugf("populateSimpleContainer original container %s", container.Name)
-	for _, blob := range s3Objects {
-		log.Debugf("populateSimpleContainer %s", *blob.Key)
-
-		// if key ends in / then its just a fake directory.
-		// do we even want to store that?
-		// for now, skip it.
-
-		if strings.HasSuffix(*blob.Key, "/") {
-			// skip it.
-			continue
-		}
-
-		prunedBlobName := *blob.Key
-		if blobPrefix != "" {
-			prunedBlobName = prunedBlobName[len(blobPrefix):]
-		}
-
-		log.Debugf("pruned blob name %s", prunedBlobName)
-
-		// need to shorten name to remove the container name itself.
-		// ie if the name of a blob if foo/bar.txt but we are currently in the "foo" container (fake vdir)
-		// then we need to prune the container name from the DestName for the blob.
-		sp := strings.Split(prunedBlobName, "/")
-
-		// if no / then no subdirs etc. Just add as is.
-		if len(sp) == 1 {
-			b := models.SimpleBlob{}
-			b.Name = prunedBlobName
-			b.Origin = container.Origin
-			b.ParentContainer = container
-			b.BlobCloudName = *blob.Key
-			b.URL = generateS3URL(*blob.Key, container.Name)
-			// add to the blob slice within the container
-			container.BlobSlice = append(container.BlobSlice, &b)
-			log.Debugf("1 S3 blob %v", b)
-		} else {
-
-			currentContainer := container
-			// if slashes, then split into chunks and create accordingly.
-			// skip last one since thats the blob name.
-			spShort := sp[0 : len(sp)-1]
-			for _, segment := range spShort {
-
-				// check if container already has a subcontainer with appropriate name
-				subContainer := sh.getSubContainer(currentContainer, segment)
-				if subContainer != nil {
-					// then we have a blob so add it to currentContainer
-					currentContainer = subContainer
-				}
-			}
-
-			b := models.SimpleBlob{}
-			b.Name = sp[len(sp)-1]
-			b.Origin = container.Origin
-			b.ParentContainer = container
-			b.BlobCloudName = *blob.Key // cloud specific name... ie the REAL name.
-			b.URL = generateS3URL(*blob.Key, container.Name)
-			currentContainer.BlobSlice = append(currentContainer.BlobSlice, &b)
-			currentContainer.Populated = true
-
-			log.Debugf("2 S3 blob name %s", b.Name)
-
-		}
-	}
-	container.Populated = true
 }
 
 // need a more solid way to generate this.
@@ -175,27 +96,8 @@ func generateS3URL(key string, containerName string) string {
 	return fmt.Sprintf("https://%s.s3.amazonaws.com/%s", containerName, key)
 }
 
-// getSubContainer gets an existing subcontainer with parent of container and name of segment.
-// otherwise it creates it, adds it to the parent container and returns the new one.
-func (sh *S3Handler) getSubContainer(container *models.SimpleContainer, segment string) *models.SimpleContainer {
 
-	// MUST be a shorthand way of doing this. But still crawling in GO.
-	for _, c := range container.ContainerSlice {
-		if c.Name == segment {
-			return c
-		}
-	}
-
-	// create a new one.
-	newContainer := models.SimpleContainer{}
-	newContainer.Name = segment
-	newContainer.Origin = container.Origin
-	newContainer.ParentContainer = container
-	container.ContainerSlice = append(container.ContainerSlice, &newContainer)
-	return &newContainer
-}
-
-// GetContainerContentsOverChannel given a URL (ending in /) returns all the contents of the container over a channel
+// GetContainerContentsOverChannel given a simpleContainer returns all the contents of the container over a channel
 // This returns a COPY of the original source container but has been populated with *some* of the blobs/subcontainers in it.
 func (sh *S3Handler) GetContainerContentsOverChannel(sourceContainer models.SimpleContainer, blobChannel chan models.SimpleContainer) error {
 
@@ -230,7 +132,6 @@ func (sh *S3Handler) GetContainerContentsOverChannel(sourceContainer models.Simp
 func (sh *S3Handler) getS3Bucket(containerName string) (*models.SimpleContainer, error) {
 
 	rootContainer := sh.GetRootContainer()
-
 	for _, container := range rootContainer.ContainerSlice {
 		if container.Name == containerName {
 			return container, nil
@@ -238,7 +139,6 @@ func (sh *S3Handler) getS3Bucket(containerName string) (*models.SimpleContainer,
 	}
 
 	return nil, errors.New("Unable to find container")
-
 }
 
 func (sh *S3Handler) generateSubContainers(s3Container *models.SimpleContainer, blobPrefix string) (*models.SimpleContainer, *models.SimpleContainer) {
@@ -633,4 +533,102 @@ func (sh *S3Handler) GeneratePresignedURL(blob *models.SimpleBlob) (string, erro
 	log.Debugf("presigning with %s and %s", s3Container.Name, blob.BlobCloudName)
 	log.Debugf("presigned URL is %s", url)
 	return url, nil
+}
+
+
+// populateSimpleContainer takes a list of S3 blobs and breaks them into virtual directories (SimpleContainers) and
+// SimpleBlob trees.
+//
+// vdir1/vdir2/blob1
+// vdir1/blob2
+// vdir1/vdir3/blob3
+// blob3
+func (sh *S3Handler) populateSimpleContainer(s3Objects []*s3.Object, container *models.SimpleContainer, blobPrefix string) {
+
+	log.Debugf("populateSimpleContainer original container %s", container.Name)
+	for _, blob := range s3Objects {
+		log.Debugf("populateSimpleContainer %s", *blob.Key)
+
+		// if key ends in / then its just a fake directory.
+		// do we even want to store that?
+		// for now, skip it.
+
+		if strings.HasSuffix(*blob.Key, "/") {
+			// skip it.
+			continue
+		}
+
+		prunedBlobName := *blob.Key
+		if blobPrefix != "" {
+			prunedBlobName = prunedBlobName[len(blobPrefix):]
+		}
+
+		log.Debugf("pruned blob name %s", prunedBlobName)
+
+		// need to shorten name to remove the container name itself.
+		// ie if the name of a blob if foo/bar.txt but we are currently in the "foo" container (fake vdir)
+		// then we need to prune the container name from the DestName for the blob.
+		sp := strings.Split(prunedBlobName, "/")
+
+		// if no / then no subdirs etc. Just add as is.
+		if len(sp) == 1 {
+			b := models.SimpleBlob{}
+			b.Name = prunedBlobName
+			b.Origin = container.Origin
+			b.ParentContainer = container
+			b.BlobCloudName = *blob.Key
+			b.URL = generateS3URL(*blob.Key, container.Name)
+			// add to the blob slice within the container
+			container.BlobSlice = append(container.BlobSlice, &b)
+			log.Debugf("1 S3 blob %v", b)
+		} else {
+
+			currentContainer := container
+			// if slashes, then split into chunks and create accordingly.
+			// skip last one since thats the blob name.
+			spShort := sp[0 : len(sp)-1]
+			for _, segment := range spShort {
+
+				// check if container already has a subcontainer with appropriate name
+				subContainer := sh.getSubContainer(currentContainer, segment)
+				if subContainer != nil {
+					// then we have a blob so add it to currentContainer
+					currentContainer = subContainer
+				}
+			}
+
+			b := models.SimpleBlob{}
+			b.Name = sp[len(sp)-1]
+			b.Origin = container.Origin
+			b.ParentContainer = container
+			b.BlobCloudName = *blob.Key // cloud specific name... ie the REAL name.
+			b.URL = generateS3URL(*blob.Key, container.Name)
+			currentContainer.BlobSlice = append(currentContainer.BlobSlice, &b)
+			currentContainer.Populated = true
+
+			log.Debugf("2 S3 blob name %s", b.Name)
+
+		}
+	}
+	container.Populated = true
+}
+
+// getSubContainer gets an existing subcontainer with parent of container and name of segment.
+// otherwise it creates it, adds it to the parent container and returns the new one.
+func (sh *S3Handler) getSubContainer(container *models.SimpleContainer, segment string) *models.SimpleContainer {
+
+	// MUST be a shorthand way of doing this. But still crawling in GO.
+	for _, c := range container.ContainerSlice {
+		if c.Name == segment {
+			return c
+		}
+	}
+
+	// create a new one.
+	newContainer := models.SimpleContainer{}
+	newContainer.Name = segment
+	newContainer.Origin = container.Origin
+	newContainer.ParentContainer = container
+	container.ContainerSlice = append(container.ContainerSlice, &newContainer)
+	return &newContainer
 }

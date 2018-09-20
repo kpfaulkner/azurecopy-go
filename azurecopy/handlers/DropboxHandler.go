@@ -86,97 +86,8 @@ func (dh *DropboxHandler) GetContainerContentsOverChannel(sourceContainer models
 
 	blobChannel <- sourceContainer
 
-	/*
-
-		dbx := files.New(*config)
-
-		// this is not valid... since dropbox doesn't have fake directories but real ones!!!
-		container, prefix := containerutils.GetContainerAndBlobPrefix(&sourceContainer)
-		log.Debugf("DB prefix %s", prefix)
-		log.Debugf("DB container %s", container.Name)
-
-		var dirArg string
-		if prefix != "" {
-			dirArg = fmt.Sprintf("%s/%s", container.Name, prefix)
-		} else {
-			dirArg = "/" + container.Name
-		}
-
-		log.Debugf("DB dirarg %s", dirArg)
-
-		arg := files.NewListFolderArg(dirArg)
-		arg.Recursive = true
-
-		res, err := dbx.ListFolder(arg)
-		if err != nil {
-			log.Fatalf("Dropbox::GetRootContainer error %s", err)
-		}
-
-		containerClone := sourceContainer
-		processEntries(res, dirArg, &containerClone)
-
-		log.Debugf("populate 1")
-		blobChannel <- containerClone
-
-		for res.HasMore {
-			arg := files.NewListFolderContinueArg(res.Cursor)
-
-			res, err = dbx.ListFolderContinue(arg)
-			if err != nil {
-				return err
-			}
-			containerClone := sourceContainer
-			processEntries(res, dirArg, &containerClone)
-			log.Debugf("populate 2")
-			blobChannel <- containerClone
-		}
-
-		log.Debugf("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
-	*/
-
-	/*
-		done := false
-		for done == false {
-			// copy of container, dont want to send back ever growing container via the channel.
-			containerClone := *azureContainer
-			blobListResponse, err := ah.blobStorageClient.ListBlobs(containerClone.Name, params)
-			if err != nil {
-				log.Fatal("Error")
-			}
-
-			ah.populateSimpleContainer(blobListResponse, &containerClone)
-
-			// return entire container via channel.
-			blobChannel <- containerClone
-
-			// if marker, then keep going.
-			if blobListResponse.NextMarker != "" {
-				params.Marker = blobListResponse.NextMarker
-			} else {
-				done = true
-			}
-		}
-
-		close(blobChannel)
-		return nil
-	*/
-	/*
-		container := models.SimpleContainer{}
-		processEntries(res, dirArg, &container)
-
-		for res.HasMore {
-			arg := files.NewListFolderContinueArg(res.Cursor)
-
-			res, err = dbx.ListFolderContinue(arg)
-			if err != nil {
-				return nil, err
-			}
-
-			processEntries(res, dirArg, &container)
-		}
-
-		return &container, nil
-	*/
+	// have deleted a bunch of code here...  no longer required, but check history if something
+	// seems off.
 
 	return nil
 }
@@ -202,13 +113,6 @@ func (dh *DropboxHandler) GetSpecificSimpleContainer(URL string) (*models.Simple
 		log.Fatalf("Dropbox::GetRootContainer error %s", err)
 	}
 
-	/*
-	log.Debugf("results are %+v\n", res)
-
-	for _, i := range res.Entries {
-		log.Debugf("entry is %+v\n", i)
-	}
- */
 	container := models.SimpleContainer{}
 	container.Name = "" // getLastSegmentOfPath(dirArg). This is the root?
 	processEntries(res, dirArg, &container)

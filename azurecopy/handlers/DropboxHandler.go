@@ -7,6 +7,7 @@ import (
 	"azurecopy/azurecopy/utils/helpers"
 	"errors"
 	"io/ioutil"
+	"os"
 	"path"
 	"regexp"
 	"strings"
@@ -78,7 +79,6 @@ func (dh *DropboxHandler) BlobExists(container models.SimpleContainer, blobName 
 // This might be an issue later with massive number of dropbox blobs. FIXME(kpfaulkner)
 func (dh *DropboxHandler) GetContainerContentsOverChannel(sourceContainer models.SimpleContainer, blobChannel chan models.SimpleContainer) error {
 
-	log.Debugf("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
 	log.Debugf("dropbox::GetContainerContentsOverChannel container %s", sourceContainer.Name)
 	defer close(blobChannel)
 
@@ -183,83 +183,6 @@ func filterContainer(rootContainer *models.SimpleContainer, dirArg string) (*mod
 	return container, nil
 
 }
-
-// populateSimpleContainer takes a list of Azure blobs and breaks them into virtual directories (SimpleContainers) and
-// SimpleBlob trees.
-//
-// vdir1/vdir2/blob1
-// vdir1/blob2
-// vdir1/vdir3/blob3
-// blob4
-
-/*
-func (dh *DropboxHandler) populateSimpleContainer(results *ListFolderResult, container *models.SimpleContainer) {
-
-	for _, i := range results.Entries {
-		log.Debugf("res %s", i)
-		switch f := i.(type) {
-		case *files.FileMetadata:
-			blob := models.SimpleBlob{}
-			blob.Name = f.Name
-			blob.URL = fmt.Sprintf("https://www.dropbox.com%s", f.PathDisplay) // NOT A REAL URL.... do we need it?
-			blob.Origin = models.DropBox
-
-			// adds to appropriate container. Will create intermediate containers if required.
-			addToContainer(&blob, f.PathDisplay, rootContainer)
-
-			//blob.ParentContainer = container
-			//container.BlobSlice = append(container.BlobSlice, &blob)
-			log.Debugf("FILE %s", f.Name)
-			log.Debugf("path display %s", f.PathDisplay)
-
-
-		}
-	}
-
-	for _, blob := range blobListResponse.Blobs {
-
-		sp := strings.Split(blob.Name, "/")
-
-		// if no / then no subdirs etc. Just add as is.
-		if len(sp) == 1 {
-			b := models.SimpleBlob{}
-			b.Name = blob.Name
-			b.Origin = container.Origin
-			b.ParentContainer = container
-			b.BlobCloudName = blob.Name
-			// add to the blob slice within the container
-			container.BlobSlice = append(container.BlobSlice, &b)
-		} else {
-
-			currentContainer := container
-			// if slashes, then split into chunks and create accordingly.
-			// skip last one since thats the blob name.
-			spShort := sp[0 : len(sp)-1]
-			for _, segment := range spShort {
-
-				// check if container already has a subcontainer with appropriate name
-				subContainer := dh.getSubContainer(currentContainer, segment)
-
-				if subContainer != nil {
-					// then we have a blob so add it to currentContainer
-					currentContainer = subContainer
-				}
-			}
-
-			b := models.SimpleBlob{}
-			b.Name = sp[len(sp)-1]
-			b.Origin = container.Origin
-			b.ParentContainer = container
-			b.BlobCloudName = blob.Name // cloud specific name... ie the REAL name.
-			b.URL = ""                  // unsure of URL
-			currentContainer.BlobSlice = append(currentContainer.BlobSlice, &b)
-			currentContainer.Populated = true
-
-		}
-	}
-	container.Populated = true
-}
-*/
 
 // getSubContainer gets an existing subcontainer with parent of container and name of segment.
 // otherwise it creates it, adds it to the parent container and returns the new one.
@@ -470,6 +393,8 @@ func (dh *DropboxHandler) WriteContainer(sourceContainer *models.SimpleContainer
 	return nil
 }
 
+// generateDestDir returns a directory path for DB... but does NOT include the final blobname
+// ie prune it off from sourceBlob
 func generateDestDir( destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) string {
 	dirSlice := make([]string, 5)
 
@@ -490,8 +415,35 @@ func generateDestDir( destContainer *models.SimpleContainer, sourceBlob *models.
 	}
 
 	dir := path.Join(dirSlice...)
-	return "/"+dir + "/" + sourceBlob.Name
+	//sp := strings.Split(sourceBlob.Name, "/")
+	//dir2 := path.Join(sp[:len(sp)-1]...)
+
+	// get path portion of
+	//return "/"+dir + "/" + dir2 +"/"
+	return "/"+dir+"/"
 }
+
+// temp solution until I get chunked uploading working.
+func readCachedFile( filePath string ) ([]byte, error) {
+	var cacheFile *os.File
+	buffer := make([]byte, 1024*1024*150)  // dropbox allows max 150M for upload...  need to chunk
+
+	// need to get cache dir from somewhere!
+	cacheFile, err := os.OpenFile(filePath, os.O_RDONLY, 0)
+	if err != nil {
+		log.Fatal(err)
+		return buffer, err
+	}
+	defer cacheFile.Close()
+
+	numBytesRead, err := cacheFile.Read(buffer)
+	if err != nil {
+		log.Fatal(err)
+		return buffer, err
+	}
+
+	return buffer[:numBytesRead], nil
+	}
 
 // WriteBlob writes a blob to an Azure container.
 // The SimpleContainer is NOT necessarily a direct mapping to an Azure container but may be representing a virtual directory.
@@ -509,12 +461,26 @@ func (dh *DropboxHandler) WriteBlob(destContainer *models.SimpleContainer, sourc
 	log.Debugf("DEST DIR is %s", destDir)
 	dbx := files.New(*config)
 	dst := destDir + sourceBlob.Name
+
+	log.Debugf("db: full dest path %s", dst)
 	commitInfo := files.NewCommitInfo(dst)
 	commitInfo.Mode.Tag = "overwrite"
 
-	fileBytes := bytes.NewReader(sourceBlob.DataInMemory) // convert to io.ReadSeeker type
+	// if cached to disk we should probably upload in chunked matter.
+	// will figure that out later. TODO(kpfaulkner)
+	if dh.cacheToDisk {
+		byteArray, err:= readCachedFile( sourceBlob.DataCachedAtPath)
+		if err != nil {
+			log.Fatal(err)
+			return err
+		}
+		fileBytes := bytes.NewReader(byteArray) // convert to io.ReadSeeker type
+		dbx.Upload( commitInfo, fileBytes)
+	} else {
+		fileBytes := bytes.NewReader(sourceBlob.DataInMemory) // convert to io.ReadSeeker type
+		dbx.Upload( commitInfo, fileBytes)
+	}
 
-	dbx.Upload( commitInfo, fileBytes)
 	return nil
 }
 

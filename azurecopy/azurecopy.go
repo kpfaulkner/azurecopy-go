@@ -4,15 +4,15 @@ import (
 	"azurecopy/azurecopy/handlers"
 	"azurecopy/azurecopy/models"
 	"azurecopy/azurecopy/utils"
-//	"azurecopy/azurecopy/utils/helpers"
+	"os"
+
+	//	"azurecopy/azurecopy/utils/helpers"
 	"azurecopy/azurecopy/utils/misc"
 	"fmt"
 	"regexp"
 	"strings"
 
 	"sync"
-
-	"os"
 
 	log "github.com/Sirupsen/logrus"
 )
@@ -224,6 +224,7 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replac
 	close(copyChannel)
 
 	// wait for all copying to be done.
+	// wait for all copying to be done.
 	wg.Wait()
 	return nil
 }
@@ -313,12 +314,12 @@ func (ac *AzureCopy) copyBlobFromChannel(destContainer *models.SimpleContainer, 
 		if !replaceExisting {
 			exists, err := ac.destHandler.BlobExists(*destContainer, blob.DestName)
 			if err != nil {
-				log.Debugf("Unable to copy %s", blob.URL)
+				log.Debugf("Unable to copy %s\n", blob.URL)
 				continue
 			}
 
 			if exists {
-				fmt.Printf("Skipping %s", blob.URL)
+				fmt.Printf("Skipping %s\n", blob.URL)
 				continue
 			}
 		}
@@ -443,13 +444,13 @@ func (ac *AzureCopy) doesDestinationBlobExist(destContainer *models.SimpleContai
 func (ac *AzureCopy) WriteBlob(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
 
 	if destContainer == nil {
-		log.Debugf("dest container is nil")
+		log.Debugf("dest container is nil\n")
 	} else {
-		log.Debugf("write dest loc %s ", destContainer.URL)
+		log.Debugf("write dest loc %s\n", destContainer.URL)
 	}
 
 	if err := ac.destHandler.WriteBlob(destContainer, sourceBlob); err != nil {
-		log.Fatalf("WriteBlob kaboom %s", err)
+		log.Fatalf("WriteBlob kaboom %s\n", err)
 	}
 
 	// if cached delete the cache.

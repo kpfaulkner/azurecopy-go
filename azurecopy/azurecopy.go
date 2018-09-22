@@ -332,7 +332,6 @@ func (ac *AzureCopy) copyBlobFromChannel(destContainer *models.SimpleContainer, 
 
 		ac.WriteBlob(destContainer, &blob)
 	}
-
 }
 
 // copyBlobFromChannelUsingCopyBlobFlag reads blob from channel, makes presigned URL (based on source blob) then triggers Azure CopyBlob operation.
@@ -341,8 +340,7 @@ func (ac *AzureCopy) copyBlobFromChannelUsingCopyBlobFlag(destContainer *models.
 	defer wg.Done()
 
 	//azureAccountName, azureAccountKey := utils.GetAzureCredentials(false, ac.config)
-
-//	azureHelper := helpers.NewAzureHelper(azureAccountName, azureAccountKey)
+    // azureHelper := helpers.NewAzureHelper(azureAccountName, azureAccountKey)
 
 	for {
 		blob, ok := <-copyChannel
@@ -376,7 +374,6 @@ func (ac *AzureCopy) copyBlobFromChannelUsingCopyBlobFlag(destContainer *models.
 		fmt.Printf("Copying %s to %s\n", blob.Name, destContainer.Name+"/"+blob.DestName)
 		//azureHelper.DoCopyBlobUsingAzureCopyBlobFlag(url, destContainer, blob.DestName)
 	}
-
 }
 
 // GetHandlerForURL returns the appropriate handler for a given cloud type.
@@ -421,7 +418,6 @@ func (ac *AzureCopy) ReadBlob(blob *models.SimpleBlob) {
 
 	if err != nil {
 		log.Fatal(err)
-
 	}
 }
 

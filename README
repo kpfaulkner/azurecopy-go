@@ -7,8 +7,8 @@ It is primarily to allow cross platform (Linux,*BSD, MacOS and Windows) versions
 - Copy to/from Filesystem (done)
 - Copy to/from Azure Blob Storage (done)
 - Copy to/from S3 (done)
+- Copy to/from Dropbox (done)
 - Add CopyBlob flag for Azure destination (huge bandwidth savings)
-- Copy to/from Dropbox
 - Copy to/from Onedrive
 - Copy to/from Google Storage
 - Copy to/from Azure File Storage

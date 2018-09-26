@@ -232,6 +232,8 @@ func (ac *AzureCopy) CopyContainerByURL(sourceURL string, destURL string, replac
 // launchCopyGoRoutines starts a number of Go Routines used for copying contents.
 func (ac *AzureCopy) launchCopyGoRoutines(destContainer *models.SimpleContainer, replaceExisting bool, copyChannel chan models.SimpleBlob, useCopyBlobFlag bool) {
 
+	ac.config.ConcurrentCount = 1
+
 	log.Debugf("launching %d goroutines", ac.config.ConcurrentCount)
 	for i := 0; i < int(ac.config.ConcurrentCount); i++ {
 		wg.Add(1)

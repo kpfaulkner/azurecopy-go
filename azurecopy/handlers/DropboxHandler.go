@@ -6,6 +6,8 @@ import (
 	"azurecopy/azurecopy/utils/containerutils"
 	"azurecopy/azurecopy/utils/helpers"
 	"errors"
+	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path"
@@ -15,6 +17,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/dropbox/dropbox-sdk-go-unofficial/dropbox"
 	"github.com/dropbox/dropbox-sdk-go-unofficial/dropbox/files"
+	"time"
 )
 
 type DropboxHandler struct {
@@ -423,28 +426,6 @@ func generateDestDir( destContainer *models.SimpleContainer, sourceBlob *models.
 	return "/"+dir+"/"
 }
 
-// temp solution until I get chunked uploading working.
-func readCachedFile( filePath string ) ([]byte, error) {
-	var cacheFile *os.File
-	buffer := make([]byte, 1024*1024*150)  // dropbox allows max 150M for upload...  need to chunk
-
-	// need to get cache dir from somewhere!
-	cacheFile, err := os.OpenFile(filePath, os.O_RDONLY, 0)
-	if err != nil {
-		log.Fatal(err)
-		return buffer, err
-	}
-	defer cacheFile.Close()
-
-	numBytesRead, err := cacheFile.Read(buffer)
-	if err != nil {
-		log.Fatal(err)
-		return buffer, err
-	}
-
-	return buffer[:numBytesRead], nil
-	}
-
 // WriteBlob writes a blob to an Azure container.
 // The SimpleContainer is NOT necessarily a direct mapping to an Azure container but may be representing a virtual directory.
 // ie we might have RootSimpleContainer -> SimpleContainer(myrealcontainer) -> SimpleContainer(vdir1) -> SimpleContainer(vdir2)
@@ -465,23 +446,70 @@ func (dh *DropboxHandler) WriteBlob(destContainer *models.SimpleContainer, sourc
 	log.Debugf("db: full dest path %s", dst)
 	commitInfo := files.NewCommitInfo(dst)
 	commitInfo.Mode.Tag = "overwrite"
+	commitInfo.ClientModified = time.Now().UTC().Round(time.Second)
+
 
 	// if cached to disk we should probably upload in chunked matter.
 	// will figure that out later. TODO(kpfaulkner)
 	if dh.cacheToDisk {
-		byteArray, err:= readCachedFile( sourceBlob.DataCachedAtPath)
+		cacheFile, err := os.OpenFile(sourceBlob.DataCachedAtPath, os.O_RDONLY, 0)
 		if err != nil {
 			log.Fatal(err)
-			return err
+			return  err
 		}
-		fileBytes := bytes.NewReader(byteArray) // convert to io.ReadSeeker type
-		dbx.Upload( commitInfo, fileBytes)
+		defer cacheFile.Close()
+		s, err  := cacheFile.Stat()
+		if err != nil {
+			log.Fatal(err)
+			return  err
+		}
+		dh.uploadChunked(dbx, cacheFile, commitInfo, s.Size())
 	} else {
 		fileBytes := bytes.NewReader(sourceBlob.DataInMemory) // convert to io.ReadSeeker type
-		dbx.Upload( commitInfo, fileBytes)
+		dh.uploadChunked(dbx, fileBytes, commitInfo, int64(len(sourceBlob.DataInMemory)))
 	}
 
 	return nil
+}
+
+// uploadChunked upload to dropbox in a chunked manner (for >150M files).
+// Heavily inspired by the Dropbox code in dbxcli demo program.
+func (dh *DropboxHandler) uploadChunked(dbx files.Client, r io.Reader, commitInfo *files.CommitInfo,  sizeTotal int64) (err error) {
+
+	chunkSize := int64(1024*1024*150) // 150M
+
+	if sizeTotal < chunkSize {
+		chunkSize = sizeTotal
+	}
+
+	res, err := dbx.UploadSessionStart(files.NewUploadSessionStartArg(),
+		&io.LimitedReader{R: r, N: chunkSize})
+	if err != nil {
+		fmt.Printf("error is %s\n", err)
+		return err
+	}
+
+	written := chunkSize
+
+	for (sizeTotal - written) > chunkSize {
+		cursor := files.NewUploadSessionCursor(res.SessionId, uint64(written))
+		args := files.NewUploadSessionAppendArg(cursor)
+
+		err = dbx.UploadSessionAppendV2(args, &io.LimitedReader{R: r, N: chunkSize})
+		if err != nil {
+			return
+		}
+		written += chunkSize
+	}
+
+	cursor := files.NewUploadSessionCursor(res.SessionId, uint64(written))
+	args := files.NewUploadSessionFinishArg(cursor, commitInfo)
+
+	if _, err = dbx.UploadSessionFinish(args, r); err != nil {
+		return
+	}
+
+	return
 }
 
 func (dh *DropboxHandler) CreateContainer(containerName string) (models.SimpleContainer, error) {

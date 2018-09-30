@@ -62,7 +62,28 @@ func (fh *FTPHandler)  GetRootContainer() models.SimpleContainer {
 
 // create container.
 func (fh *FTPHandler) CreateContainer(containerName string) (models.SimpleContainer, error) {
-return models.SimpleContainer{}, nil
+  return models.SimpleContainer{}, nil
+}
+
+// get base path and container name
+// path will be something like myftp.com/dir1/dir2/mydir3
+// will return /dir1/dir2  and /mydir3/
+func getFTPContainerNameFromURL(url string) (string, string) {
+
+	log.Debugf("rootContainerPath %s", url)
+	if url != "" {
+		var sp = strings.Split(url, "/")
+		l := len(sp)
+
+		log.Debugf("sp is %s", sp)
+		genPath := strings.Join(sp[:l-2], "/") + "/"
+		container := sp[l-2]
+
+		return genPath, container
+	}
+
+	// wasn't passed, so return nada
+	return "", ""
 }
 
 // GetSpecificSimpleContainer given a URL (ending in /) then get the SIMPLE container that represents it.
@@ -70,7 +91,15 @@ return models.SimpleContainer{}, nil
 // This is up to specific handlers. Currently (for example). For FTP if the url is myftpsite.com/dir1/dir2/dir3/ then it
 // will return a SimpleContainer representing dir3 with all its contents.6
 func (fh *FTPHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleContainer, error) {
+	_, container := getFTPContainerNameFromURL(URL)
 
+	rootContainer := models.NewSimpleContainer()
+	rootContainer.URL = URL
+	rootContainer.Origin = models.FTP
+	rootContainer.Name = container
+	rootContainer.IsRootContainer = true
+
+	return rootContainer, nil
 }
 
 // GetContainerContentsOverChannel given a URL (ending in /) returns all the contents of the container over a channel
@@ -89,9 +118,38 @@ func (fh *FTPHandler) GetSpecificSimpleBlob(URL string) (*models.SimpleBlob, err
 
 }
 
+// dupe of filesystem. Need to check if can just use single method instance.
+func (fh *FTPHandler) generateFullPath(container *models.SimpleContainer) string {
+
+	path := container.Name
+	currentContainer := container.ParentContainer
+	for currentContainer != nil {
+		if currentContainer.Name != "" {
+			path = filepath.Join(currentContainer.Name, path)
+		}
+
+		currentContainer = currentContainer.ParentContainer
+	}
+
+	fullPath := fh.basePath + path + "/"
+	// if full path is rootContainerPath then we need to actually generate
+	return fullPath
+}
+
 // Given a container and a blob name, read the blob.
 func (fh *FTPHandler) ReadBlob(container models.SimpleContainer, blobName string) models.SimpleBlob {
+	var blob models.SimpleBlob
 
+	dirPath := fh.generateFullPath(&container)
+	fullPath := filepath.Join(dirPath, blobName)
+
+	blob.DataCachedAtPath = fullPath
+	blob.BlobInMemory = false
+	blob.Name = blobName
+	blob.ParentContainer = &container
+	blob.Origin = container.Origin
+	blob.URL = fullPath
+	return blob
 }
 
 // Does blob exist

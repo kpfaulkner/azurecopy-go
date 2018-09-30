@@ -9,4 +9,5 @@ const (
 	DropBox
 	OneDrive
 	Filesystem
+	FTP
 )

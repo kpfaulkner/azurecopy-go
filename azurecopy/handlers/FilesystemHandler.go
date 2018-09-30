@@ -2,11 +2,11 @@ package handlers
 
 import (
 	"azurecopy/azurecopy/models"
-	"path/filepath"
-	"strings"
-
+	"errors"
 	"os"
 	"path"
+	"path/filepath"
+	"strings"
 
 	log "github.com/Sirupsen/logrus"
 )
@@ -349,19 +349,47 @@ func (fh *FilesystemHandler) GetContainerContentsOverChannel(sourceContainer mod
 	return nil
 }
 
+func isContainer(url string) bool {
+	fi, err := os.Stat(url)
+	if err != nil {
+		log.Fatalf("Unable to handle path %s\n", url)
+	}
+	return fi.Mode().IsDir()
+	}
+
 // GetSpecificSimpleContainer given a URL (ending in /) then get the SIMPLE container that represents it.
 // eg. c:\temp\mydir1\mydir2\
 func (fh *FilesystemHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleContainer, error) {
 
-	_, container := generateBasePath(URL)
+	if URL != "" {
 
-	rootContainer := models.NewSimpleContainer()
-	rootContainer.URL = URL
-	rootContainer.Origin = models.Filesystem
-	rootContainer.Name = container
-	rootContainer.IsRootContainer = true
+		// check if its a container.
+		if isContainer(URL) {
 
-	return rootContainer, nil
+			var sp= strings.Split(URL, "/")
+			parentContainer := models.NewSimpleContainer()
+			parentContainer.IsRootContainer = true
+			parentContainer.Origin = models.FTP
+			currentContainer := parentContainer
+			for _, segment := range sp[1:] {
+				container := models.NewSimpleContainer()
+				container.URL = URL
+				container.Origin = models.FTP
+				container.Name = segment
+				container.IsRootContainer = false
+				container.ParentContainer = currentContainer
+				currentContainer.ContainerSlice = append(currentContainer.ContainerSlice, container)
+
+				currentContainer = container
+				log.Debugf("segment is %s\n", segment)
+			}
+
+			return currentContainer, nil
+		}
+	}
+
+	return nil, errors.New("URL cannot be empty")
+
 }
 
 func (fh *FilesystemHandler) GeneratePresignedURL(blob *models.SimpleBlob) (string, error) {

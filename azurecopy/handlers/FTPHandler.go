@@ -225,7 +225,17 @@ func (fh *FTPHandler) ReadBlob(container models.SimpleContainer, blobName string
 }
 
 // Does blob exist
+// question if error should be returned?
 func (fh *FTPHandler) BlobExists(container models.SimpleContainer, blobName string) (bool, error) {
+	dirPath := fh.generateFullPath(&container)
+	fullPath := filepath.Join(dirPath, blobName)
+
+	_, err := fh.client.FileSize( fullPath)
+	if err != nil {
+		return false, nil
+	}
+
+	return true, nil
 
 }
 

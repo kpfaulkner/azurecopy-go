@@ -369,12 +369,12 @@ func (fh *FilesystemHandler) GetSpecificSimpleContainer(URL string) (*models.Sim
 			var sp= strings.Split(URL, "/")
 			parentContainer := models.NewSimpleContainer()
 			parentContainer.IsRootContainer = true
-			parentContainer.Origin = models.FTP
+			parentContainer.Origin = models.Filesystem
 			currentContainer := parentContainer
 			for _, segment := range sp[1:] {
 				container := models.NewSimpleContainer()
 				container.URL = URL
-				container.Origin = models.FTP
+				container.Origin = models.Filesystem
 				container.Name = segment
 				container.IsRootContainer = false
 				container.ParentContainer = currentContainer

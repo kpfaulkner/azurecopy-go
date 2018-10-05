@@ -2,9 +2,13 @@ package handlers
 
 import (
 	"azurecopy/azurecopy/models"
+	"azurecopy/azurecopy/utils/misc"
+	"github.com/labstack/gommon/bytes"
+	"io"
+	"io/ioutil"
 	"path/filepath"
 	"strings"
-
+	"errors"
 	"os"
 	"path"
 
@@ -31,10 +35,16 @@ type FTPHandler struct {
 
 	// client connection
 	client *ftp.ServerConn
+
+	// determine if we're caching the blob to disk during copy operations.
+	// or if we're keeping it in memory
+	cacheToDisk   bool
+	cacheLocation string
+
 }
 
 // NewFTPHandler factory to create new one. Evil?
-func NewFTPHandler(address string, username string, password string, isSource bool) (*FTPHandler, error) {
+func NewFTPHandler(address string, username string, password string, isSource bool, cacheToDisk bool) (*FTPHandler, error) {
 
 	fh := new(FTPHandler)
 	fh.IsSource = isSource
@@ -49,6 +59,15 @@ func NewFTPHandler(address string, username string, password string, isSource bo
 	}
 
 	fh.client = client
+	fh.cacheToDisk = cacheToDisk
+
+	dir, err := ioutil.TempDir("", "azurecopy")
+	if err != nil {
+		log.Fatalf("Unable to create temp directory %s", err)
+	}
+
+	fh.cacheLocation = dir
+
 	return fh, nil
 }
 
@@ -91,15 +110,34 @@ func getFTPContainerNameFromURL(url string) (string, string) {
 // This is up to specific handlers. Currently (for example). For FTP if the url is myftpsite.com/dir1/dir2/dir3/ then it
 // will return a SimpleContainer representing dir3 with all its contents.6
 func (fh *FTPHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleContainer, error) {
-	_, container := getFTPContainerNameFromURL(URL)
+	if URL != "" {
 
-	rootContainer := models.NewSimpleContainer()
-	rootContainer.URL = URL
-	rootContainer.Origin = models.FTP
-	rootContainer.Name = container
-	rootContainer.IsRootContainer = true
+		// check if its a container.
+		if isContainer(URL) {
 
-	return rootContainer, nil
+			var sp= strings.Split(URL, "/")
+			parentContainer := models.NewSimpleContainer()
+			parentContainer.IsRootContainer = true
+			parentContainer.Origin = models.FTP
+			currentContainer := parentContainer
+			for _, segment := range sp[1:] {
+				container := models.NewSimpleContainer()
+				container.URL = URL
+				container.Origin = models.FTP
+				container.Name = segment
+				container.IsRootContainer = false
+				container.ParentContainer = currentContainer
+				currentContainer.ContainerSlice = append(currentContainer.ContainerSlice, container)
+
+				currentContainer = container
+				log.Debugf("segment is %s\n", segment)
+			}
+
+			return currentContainer, nil
+		}
+	}
+
+	return nil, errors.New("URL cannot be empty")
 }
 
 // GetContainerContentsOverChannel given a URL (ending in /) returns all the contents of the container over a channel
@@ -143,8 +181,42 @@ func (fh *FTPHandler) ReadBlob(container models.SimpleContainer, blobName string
 	dirPath := fh.generateFullPath(&container)
 	fullPath := filepath.Join(dirPath, blobName)
 
+	// populate this to disk.
+	if fh.cacheToDisk {
+
+		cacheName := misc.GenerateCacheName(blob.BlobCloudName)
+		blob.DataCachedAtPath = fh.cacheLocation + "/" + cacheName
+		log.Debugf("azure blob %s cached at location %s", blob.BlobCloudName, blob.DataCachedAtPath)
+	}
+
+	r, err := fh.client.Retr(fullPath)
+	if err != nil {
+		log.Fatal(err)
+	} else {
+
+		if fh.cacheToDisk {
+			// read directly into cached file
+			cacheFile, err := os.OpenFile(blob.DataCachedAtPath, os.O_WRONLY|os.O_CREATE, 0666)
+			defer cacheFile.Close()
+			if err != nil {
+				log.Fatalf("Populate blob %s", err)
+			}
+			_, err = io.Copy(cacheFile, r)
+			blob.BlobInMemory = false
+
+		} else {
+			buf, err := ioutil.ReadAll(r)
+			if err != nil {
+				log.Fatal(err)
+			}
+			r.Close() // test we can close two times
+
+			blob.DataInMemory = buf
+			blob.BlobInMemory = true
+		}
+	}
+
 	blob.DataCachedAtPath = fullPath
-	blob.BlobInMemory = false
 	blob.Name = blobName
 	blob.ParentContainer = &container
 	blob.Origin = container.Origin

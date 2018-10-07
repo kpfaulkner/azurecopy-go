@@ -41,6 +41,7 @@ type CloudHandlerInterface interface {
 	BlobExists(container models.SimpleContainer, blobName string) (bool, error)
 
 	// if we already have a reference to a SimpleBlob, then read it and populate it.
+	// ie we're populating our in process copy of the blob (ie reading it from the provider).
 	PopulateBlob(blob *models.SimpleBlob) error
 
 	// given a container and blob, write blob.

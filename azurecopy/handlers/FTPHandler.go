@@ -2,15 +2,16 @@ package handlers
 
 import (
 	"azurecopy/azurecopy/models"
+	"azurecopy/azurecopy/utils/containerutils"
 	"azurecopy/azurecopy/utils/misc"
-	"github.com/labstack/gommon/bytes"
 	"io"
 	"io/ioutil"
 	"path/filepath"
 	"strings"
 	"errors"
 	"os"
-	"path"
+	"bytes"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/jlaffaye/ftp"
@@ -140,11 +141,61 @@ func (fh *FTPHandler) GetSpecificSimpleContainer(URL string) (*models.SimpleCont
 	return nil, errors.New("URL cannot be empty")
 }
 
+// GetContainerContents populates the container (directory) with the next level contents
+// currently wont do recursive.
+func (fh *FTPHandler) GetContainerContents(sourceContainer *models.SimpleContainer) error {
+
+	/*  WIP!!!
+	fullPath := fh.generateFullPath(sourceContainer)
+
+	entryList, err := fh.client.List( fullPath)
+
+	// loop through until all directories done....
+	done := false
+	for done == false {
+		// copy of container, dont want to send back ever growing container via the channel.
+		containerClone := sourceContainer
+
+		//azureContainer := ah.blobStorageClient.GetContainerReference(azureContainer.Name)
+		blobListResponse, err := containerURL.ListBlobs( ctx, marker, storage.ListBlobsOptions{ Prefix: blobPrefix})
+		if err != nil {
+			log.Fatal("Error")
+		}
+
+		ah.populateSimpleContainer(blobListResponse, &containerClone, blobPrefix)
+
+		// return entire container via channel.
+		blobChannel <- containerClone
+
+		// if marker, then keep going.
+		if blobListResponse.NextMarker.NotDone() {
+			marker = blobListResponse.NextMarker
+		} else {
+			done = true
+		}
+	}
+
+	close(blobChannel)
+
+	*/
+	return nil
+
+}
+
 // GetContainerContentsOverChannel given a URL (ending in /) returns all the contents of the container over a channel
 // GetContainerContentsOverChannel given a URL (ending in /) returns all the contents of the container over a channel
 // This returns a COPY of the original source container but has been populated with *some* of the blobs/subcontainers in it.
+// This is going to be inefficient from a memory allocation pov.
+// Am still creating various structs that we strictly do not require for copying (all the tree structure etc) but this will
+// at least help each cloud provider be consistent from a dev pov. Think it's worth the overhead. TODO(kpfaulkner) confirm :)
 func (fh *FTPHandler) GetContainerContentsOverChannel(sourceContainer models.SimpleContainer, blobChannel chan models.SimpleContainer) error {
 
+	defer close(blobChannel)
+	// just do it in bulk for FS. Figure out later if its an issue.
+	fh.GetContainerContents(&sourceContainer)
+	blobChannel <- sourceContainer
+
+	return nil
 }
 
 // GetSpecificSimpleBlob given a URL (NOT ending in /) then get the SIMPLE blob that represents it.
@@ -173,6 +224,34 @@ func (fh *FTPHandler) generateFullPath(container *models.SimpleContainer) string
 	// if full path is rootContainerPath then we need to actually generate
 	return fullPath
 }
+
+func reverseStringSlice( s []string ) []string{
+	for i := len(s)/2-1; i >= 0; i-- {
+		opp := len(s)-1-i
+		s[i], s[opp] = s[opp], s[i]
+	}
+
+	return s
+}
+// generate complete path of blob
+func (fh *FTPHandler) generateBlobFullPath(blob *models.SimpleBlob) string {
+
+	nameElements := []string{}
+	nameElements = append(nameElements, blob.DestName)
+
+	currentContainer := blob.ParentContainer
+	for currentContainer != nil {
+		if currentContainer.Name != "" {
+			nameElements = append(nameElements, currentContainer.Name)
+		}
+		currentContainer = currentContainer.ParentContainer
+	}
+
+	nameElements = reverseStringSlice( nameElements)
+	fullPath := strings.Join(nameElements, "/")
+	return fullPath
+}
+
 
 // Given a container and a blob name, read the blob.
 func (fh *FTPHandler) ReadBlob(container models.SimpleContainer, blobName string) models.SimpleBlob {
@@ -240,31 +319,111 @@ func (fh *FTPHandler) BlobExists(container models.SimpleContainer, blobName stri
 }
 
 // if we already have a reference to a SimpleBlob, then read it and populate it.
+// ie we're populating our in process copy of the blob (ie reading it from the provider).
 func (fh *FTPHandler) PopulateBlob(blob *models.SimpleBlob) error {
+	fullPath := fh.generateBlobFullPath( blob)
 
+	// populate this to disk.
+	if fh.cacheToDisk {
+
+		cacheName := misc.GenerateCacheName(blob.BlobCloudName)
+		blob.DataCachedAtPath = fh.cacheLocation + "/" + cacheName
+		log.Debugf("azure blob %s cached at location %s", blob.BlobCloudName, blob.DataCachedAtPath)
+	}
+
+	r, err := fh.client.Retr(fullPath)
+	if err != nil {
+		log.Fatal(err)
+	} else {
+
+		if fh.cacheToDisk {
+			// read directly into cached file
+			cacheFile, err := os.OpenFile(blob.DataCachedAtPath, os.O_WRONLY|os.O_CREATE, 0666)
+			defer cacheFile.Close()
+			if err != nil {
+				log.Fatalf("Populate blob %s", err)
+			}
+			_, err = io.Copy(cacheFile, r)
+			blob.BlobInMemory = false
+
+		} else {
+			buf, err := ioutil.ReadAll(r)
+			if err != nil {
+				log.Fatal(err)
+			}
+			r.Close() // test we can close two times
+
+			blob.DataInMemory = buf
+			blob.BlobInMemory = true
+		}
+	}
+
+	blob.DataCachedAtPath = fullPath
+	blob.URL = fullPath
+
+	return nil
+}
+
+func (fh *FTPHandler) createSubDirectories(fullPath string) error {
+	err := fh.client.MakeDir(fullPath)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // given a container and blob, write blob.
-func (fh *FTPHandler) WriteBlob(container *models.SimpleContainer, blob *models.SimpleBlob) error {
+func (fh *FTPHandler) WriteBlob(destContainer *models.SimpleContainer, sourceBlob *models.SimpleBlob) error {
+	blobName := sourceBlob.Name
+	if blobName[0] == os.PathSeparator {
+		blobName = blobName[1:]
+	}
 
+	fullPath := fh.generateFullPath(destContainer) + blobName
+
+	// make sure subdirs are created.
+	err := fh.createSubDirectories(fullPath)
+	if err != nil {
+		log.Fatal(err)
+		return err
+	}
+
+	if !sourceBlob.BlobInMemory {
+		// cached on disk.
+		newFile, err := os.OpenFile(fullPath, os.O_WRONLY|os.O_CREATE, 0)
+		if err != nil {
+			return err
+		}
+		err = fh.client.Stor(fullPath, newFile )
+		if err != nil {
+			return err
+		}
+	} else {
+		// in memory.
+		err = fh.client.Stor( fullPath,bytes.NewReader( sourceBlob.DataInMemory) )
+		if err != nil {
+			log.Fatal("Unable to upload file " + fullPath, err)
+		}
+	}
+
+	return nil
 }
 
 // write a container (and subcontents) to the appropriate data store
 func (fh *FTPHandler) WriteContainer(sourceContainer *models.SimpleContainer, destContainer *models.SimpleContainer) error {
-
+return nil
 }
 
 // Gets a container. Populating the subtree? OR NOT? hmmmm
 func (fh *FTPHandler)  GetContainer(containerName string) models.SimpleContainer {
+	var container models.SimpleContainer
 
-}
-
-// populates container with data.
-func (fh *FTPHandler) GetContainerContents(container *models.SimpleContainer) error {
-
+	return container
 }
 
 // generates presigned URL so Azure can access blob for CopyBlob flag operation.
 func (fh *FTPHandler)  GeneratePresignedURL(blob *models.SimpleBlob) (string, error) {
+	return "", nil
 
 }
